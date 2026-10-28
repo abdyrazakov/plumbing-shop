@@ -16,8 +16,10 @@
                     <span class="category-card-icon">
                         <img src="{% static category.icon_file %}" alt="">
                     </span>
-                    <span class="category-card-name">{{ category.name }}</span>
-                    <span class="category-card-count">{{ category.product_count|ru_product_count }}</span>
+                    <span class="category-card-body">
+                        <span class="category-card-name">{{ category.name }}</span>
+                        <span class="category-card-count">{{ category.product_count|ru_product_count }}</span>
+                    </span>
                 </a>
             </li>
         {% empty %}

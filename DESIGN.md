@@ -380,6 +380,127 @@ flagged elements — no new palette, no new type scale.
   photo), product detail (order-form card left-aligned under the product
   image/info block, not independently centered).
 
+## Ticket: round-3 visual fixes from Designer review (VISUAL: FAIL)
+
+A further follow-up review flagged four more concrete defects on top of the
+round-2 fixes. Two items already fixed by hand outside this pipeline are
+explicitly **out of scope**: the sticky-footer flex rules on `.site-content`/
+`.site-footer` (don't touch), and `seed_demo.py`'s placeholder generation (no
+Pillow-based placeholder to re-add — `faucet.jpg` is already a real,
+regenerated icon). This ticket only touches the four items below. Same
+established palette/type system as before (teal `--color-primary`, orange
+`--color-accent`, success green `--color-success`/`--color-success-tint`,
+"Source Sans 3", `10px` radius, existing `--shadow`/`--shadow-hover`).
+Consulted `frontend-design` before touching template/CSS; per that pass, three
+of the four fixes are corrective (stay inside existing tokens — border/dot on
+an existing badge, a grid track-sizing change, a grid-alignment change), and
+the fourth (home category cards) is the one place on the site that now holds
+real photography, so it gets a bigger structural change — promoting the
+56px icon tile to a full-width photo band — while staying a single consistent
+treatment across all four cards (no new palette, no per-card styling).
+
+### Design direction (from frontend-design skill pass)
+
+- **Stock badge (`.product-detail-stock`)**: the pale tint-only background
+  reads as neutral, not positive. Rather than a louder solid fill (which
+  would compete with the page's orange accent as the "bold" element), add a
+  `1px solid` border in `currentColor` (so it tracks whichever state color is
+  active — success green or the existing `is-low` accent) plus a small solid
+  dot (a `::before`, filled with `currentColor`) ahead of the text. The
+  border gives the chip a visible edge against the tint, and the dot is the
+  universal "status indicator" convention — both read as a status signal
+  without turning the badge into a loud block of color.
+- **Catalog product grid (`.product-grid`)**: the current
+  `repeat(auto-fill, minmax(200px, 1fr))` creates empty filler tracks for a
+  sparse row, and because those tracks are `1fr`, they claim an equal share
+  of the row's width — same height as the real cards, directly beside them —
+  which is what reads as a broken reserved block rather than ordinary page
+  margin. Switch to `auto-fit` (collapses unused tracks to zero instead of
+  reserving space for them) and cap the track's upper bound at a fixed
+  `240px` instead of `1fr` (cards keep their natural size instead of
+  stretching into leftover space), plus explicit `justify-content: start` so
+  the row anchors left. Net effect: a 1–2 item row renders as a few
+  normal-sized cards with ordinary page background beside them, not a
+  stretched ghost column.
+- **Product detail two-column layout (`.product-detail`)**: the image column
+  can run much taller than the text column on short-description products.
+  Two changes, both already implied by the ticket's own suggestions: cap the
+  image's height (`max-height`, with the existing `object-fit` behavior
+  applied) so a tall product photo doesn't runaway-grow the row, and add
+  `align-items: center` to the `.product-detail` grid so the info column's
+  content centers vertically against the image's height instead of pinning
+  to the top. Together this reads as one balanced composition instead of two
+  independently sized blocks, without needing to touch either column's
+  internal content.
+- **Home category cards (`.category-card-icon`)**: this is the one spot on
+  the site with real multi-color photography, so it's the one place that
+  earns a bolder structural move (spend the boldness here, not by touching
+  colors elsewhere). The 56px square tile with a border was sized and framed
+  for a flat single-color glyph; a photo in that treatment looks like a
+  cropped thumbnail stuck in a box. Promote it to a full-width photo band
+  across the top of the card (`aspect-ratio: 16/9`, `object-fit: cover`,
+  flush to the card's edges, rounded only on the top corners to match the
+  card's own radius), with the name/count moved into a padded content area
+  below. Because each category's real photo already differs in color,
+  composition, and subject, this single consistent frame is what gives the
+  row visual variety card-to-card — no per-card color/shape differences
+  needed, which keeps the four cards a coherent family rather than
+  inconsistent with each other. Keep the existing lift+shadow `:hover`
+  as-is; no icon-specific hover needed.
+
+### Files this ticket touches
+
+- **`catalog/static/catalog/style.css`**:
+  - `.product-detail-stock` and `.product-detail-stock.is-low` — add
+    `display: inline-flex; align-items: center; gap: 0.4rem; border: 1px
+    solid currentColor;`; add a `::before` (6px circle, `background:
+    currentColor; border-radius: 50%; flex-shrink: 0;`) for the status dot.
+    No markup change needed for the dot (pure `::before`).
+  - `.product-grid` — change `grid-template-columns: repeat(auto-fill,
+    minmax(200px, 1fr))` to `repeat(auto-fit, minmax(200px, 240px))`; add
+    `justify-content: start;`.
+  - `.product-detail` — add `align-items: center;`.
+  - `.product-detail img` — add `max-height: 420px;` (keep existing `width:
+    100%`, `border-radius`, `border`; add `object-fit: cover;` since height
+    is now capped and width/height can disagree with source aspect ratio).
+  - `.category-card` — add `overflow: hidden;` (needed so the photo band's
+    top corners clip to the card's rounded corners); remove the padding that
+    currently wraps the icon+text together (padding moves to the new
+    `.category-card-body` below).
+  - `.category-card-icon` — replace the 56px/8px-radius/bordered-square rules
+    with: `width: 100%; aspect-ratio: 16 / 9; overflow: hidden;` (drop the
+    `border`, `border-radius`, `justify-content`/`align-items` centering —
+    no longer needed for a full-bleed band); keep `img { width: 100%; height:
+    100%; object-fit: cover; display: block; }`.
+  - **`.category-card-body`** (new rule) — `display: flex; flex-direction:
+    column; gap: 0.6rem; padding: 1rem 1.25rem 1.25rem;` (carries the gap/
+    padding that used to live on `.category-card`).
+- **`catalog/templates/catalog/home.html`** — wrap
+  `.category-card-name`/`.category-card-count` (but not
+  `.category-card-icon`) in a new `<span class="category-card-body">`, so the
+  photo band sits flush against the card's top/left/right edges and the text
+  gets its own padded area below it.
+
+### Notes
+
+- Do **not** touch `.site-content`/`.site-footer` flex rules (sticky-footer
+  fix already landed by hand) or `seed_demo.py`'s placeholder path (already
+  fixed; no Pillow placeholder to reintroduce). Do not touch
+  `catalog/static/catalog/icons/faucet.jpg` — already regenerated and fine.
+- No new tokens, no new icon/image assets — this ticket restyles existing
+  elements with the existing palette.
+- Validate by viewing: a product-detail page with a short description at a
+  wide viewport (info column should center against the image, not pin to the
+  top, and a tall image shouldn't tower over the text); a category with only
+  1–2 products on the catalog page at a wide viewport (cards should sit at
+  their natural size with ordinary page background beside them, not a
+  stretched empty block); the product detail stock badge for both in-stock
+  and low-stock states (visible border + dot, still a restrained chip, not a
+  solid-fill badge); the home page at a wide and a narrow viewport (four
+  photo bands with rounded top corners only, text below in its own padded
+  area, existing `@media (max-width: 640px)` rules still hold since no
+  grid-column counts changed).
+
 ## Environment note
 
 A virtualenv already exists at `.venv`, built with Python 3.11 (not the
