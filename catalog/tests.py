@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.contrib import admin
+from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
@@ -73,11 +74,13 @@ class AdminRegistrationTests(TestCase):
         self.assertIn(Category, admin.site._registry)
         self.assertIn(Product, admin.site._registry)
         self.assertIn(Order, admin.site._registry)
-        self.assertIn(OrderItem, admin.site._registry)
 
     def test_admin_model_options_available(self):
-        for model in (Category, Product, Order, OrderItem):
+        for model in (Category, Product, Order):
             self.assertIsNotNone(admin.site._registry[model])
+
+    def test_order_item_not_separately_registered(self):
+        self.assertNotIn(OrderItem, admin.site._registry)
 
 
 class ViewTests(TestCase):
@@ -500,3 +503,74 @@ class ProductImageFallbackTests(TestCase):
         )
         response = self.client.get(reverse('product_detail', args=[product.id]))
         self.assertNotContains(response, 'catalog/icons/placeholder.jpg')
+
+
+class AdminTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser(
+            username='owner', email='owner@example.com', password='password123',
+        )
+        self.client.force_login(self.user)
+        self.category = Category.objects.create(name='Pipes')
+        self.other_category = Category.objects.create(name='Valves')
+
+    def test_category_admin_shows_product_count(self):
+        Product.objects.create(
+            name='Pipe A', description='d', price=Decimal('10.00'),
+            category=self.category, stock_quantity=10,
+        )
+        Product.objects.create(
+            name='Pipe B', description='d', price=Decimal('10.00'),
+            category=self.category, stock_quantity=10,
+        )
+        Product.objects.create(
+            name='Valve A', description='d', price=Decimal('10.00'),
+            category=self.other_category, stock_quantity=10,
+        )
+        response = self.client.get(reverse('admin:catalog_category_changelist'))
+        self.assertContains(response, '<td class="field-product_count">2</td>', html=True)
+        self.assertContains(response, '<td class="field-product_count">1</td>', html=True)
+
+    def test_product_admin_thumbnail_fallback(self):
+        Product.objects.create(
+            name='With Photo', description='d', price=Decimal('10.00'),
+            image=SimpleUploadedFile('pipe.jpg', b'fake-image-bytes', content_type='image/jpeg'),
+            category=self.category, stock_quantity=10,
+        )
+        Product.objects.create(
+            name='No Photo', description='d', price=Decimal('10.00'),
+            category=self.category, stock_quantity=10,
+        )
+        response = self.client.get(reverse('admin:catalog_product_changelist'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '—')
+
+    def test_order_admin_shows_item_count_and_total(self):
+        product_a = Product.objects.create(
+            name='Pipe A', description='d', price=Decimal('10.00'),
+            category=self.category, stock_quantity=10,
+        )
+        product_b = Product.objects.create(
+            name='Pipe B', description='d', price=Decimal('5.50'),
+            category=self.category, stock_quantity=10,
+        )
+        order = Order.objects.create(customer_name='Jane Doe', phone='555-1234')
+        OrderItem.objects.create(order=order, product=product_a, quantity=2)
+        OrderItem.objects.create(order=order, product=product_b, quantity=3)
+        expected_total = (2 * Decimal('10.00') + 3 * Decimal('5.50')).normalize()
+
+        response = self.client.get(reverse('admin:catalog_order_changelist'))
+        self.assertContains(response, '<td class="field-item_count">2</td>', html=True)
+        self.assertContains(response, str(expected_total))
+
+    def test_order_item_inline_subtotal(self):
+        product = Product.objects.create(
+            name='Pipe A', description='d', price=Decimal('10.00'),
+            category=self.category, stock_quantity=10,
+        )
+        order = Order.objects.create(customer_name='Jane Doe', phone='555-1234')
+        OrderItem.objects.create(order=order, product=product, quantity=4)
+
+        response = self.client.get(reverse('admin:catalog_order_change', args=[order.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, str(4 * Decimal('10.00')))

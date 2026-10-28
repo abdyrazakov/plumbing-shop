@@ -15,7 +15,7 @@
             <h1>{{ product.name }}</h1>
             <p class="product-detail-price">{{ product.price }} сом</p>
             <p>{{ product.description }}</p>
-            <span class="product-detail-stock{% if product.stock_quantity < 5 %} is-low{% endif %}">
+            <span class="product-detail-stock{% if product.is_low_stock %} is-low{% endif %}">
                 {% if product.stock_quantity > 0 %}В наличии: {{ product.stock_quantity }} шт.{% else %}Под заказ{% endif %}
             </span>
         </div>

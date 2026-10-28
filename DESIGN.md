@@ -997,6 +997,200 @@ Same established token set throughout (teal `--color-primary`, orange
   correct line items/quantities/total → checkout → `order_thanks` lists all
   three → cart empty afterward.
 
+## Ticket: admin panel visual + usability pass
+
+The owner is the sole admin user and runs catalog management + order processing
+through `/admin/` daily, but it's still stock Django admin — bare
+`admin.site.register(...)` calls, default blue branding, no thumbnails/
+filters/search/computed totals. This ticket reskins the chrome (header bar +
+primary buttons/links only, via the standard template-override pattern, not a
+third-party admin theme) and gives each of the four models a `ModelAdmin`
+suited to how the owner actually scans/edits them. Same established brand
+tokens throughout (teal `--color-primary` `#0f5f66`/`--color-primary-dark`
+`#0b474d`, orange `--color-accent` `#e07a3f`/`--color-accent-dark` `#c3602a`,
+`10px` radius, "Source Sans 3") — no new palette introduced for the admin.
+
+### Design direction (from frontend-design skill pass)
+
+- **Header bar**: background `--color-primary`, white text — same teal as the
+  storefront header, so the admin reads as "the same shop," not a visually
+  separate product.
+- **Branding text**: white, inherits `"Source Sans 3"`; no size/weight change
+  from Django's default, recolor only.
+- **Module/section links, breadcrumbs**: `--color-primary`, hovering to
+  `--color-primary-dark` — mirrors Django's own two-step blue hover, palette
+  swapped.
+- **Primary submit buttons** (`.default`, `.submit-row input[type=submit]` —
+  i.e. "Save"): `--color-accent` background / white text, hovering to
+  `--color-accent-dark` — the one "do it" color, consistent with the
+  storefront reserving orange for a single primary CTA per view. Delete/
+  secondary buttons keep Django's own default styling untouched.
+- **Restraint**: nothing else changes — no sidebar/table/widget restyle, no
+  new rounded surfaces beyond buttons Django already rounds. This is a
+  recolor of three elements (header, links, primary buttons), not a rebuild.
+
+### A note on the template-override gotcha
+
+`shop/settings.py`'s `TEMPLATES[0]['DIRS']` is currently `[]`, relying on
+`APP_DIRS: True`. Django's `app_directories` loader resolves `admin/
+base_site.html` by walking `INSTALLED_APPS` **in order** and using the first
+match — and `django.contrib.admin` is listed *before* `catalog`, so an
+override placed at `catalog/templates/admin/base_site.html` would silently
+never be reached (contrib.admin's own copy matches first). The
+Django-documented fix is a **project-level** `templates/` directory added to
+`TEMPLATES[0]['DIRS']`, since the filesystem loader (which serves `DIRS`) is
+always consulted before the app-directories loader regardless of app order.
+That's the layout below.
+
+### Files this ticket touches
+
+- **`shop/settings.py`** — set `TEMPLATES[0]['DIRS'] = [BASE_DIR /
+  'templates']` (see note above).
+- **`templates/admin/base_site.html`** (new, project-level, not inside
+  `catalog/`) — `{% extends "admin/base_site.html" %}` + `{% load static %}`;
+  override `{% block extrastyle %}{{ block.super }}<link rel="stylesheet"
+  href="{% static 'catalog/admin.css' %}">{% endblock %}`. This is the only
+  template override needed — `site_header`/`site_title`/`index_title` text
+  comes from Python attributes (below), not this template.
+- **`catalog/static/catalog/admin.css`** (new) — hand-written override,
+  loaded only on admin pages (not shared with the storefront's `style.css`,
+  which isn't `{% static %}`-included in admin templates and shouldn't be —
+  its generic `body`/`a`/`h1` selectors would fight Django admin's own
+  layout). Re-declares just the brand hex values it needs as a small
+  `:root` block up top with a comment pointing at `catalog/static/
+  catalog/style.css` as the source of truth, then targets Django's own
+  documented admin CSS hooks: `#header` (background/color), `#branding h1`,
+  `div.breadcrumbs`, `#content-main a`/`.module h2` (links, with
+  `:hover`), `.button.default`, `input[type=submit].default`,
+  `.submit-row input[type=submit]` (primary buttons, with `:hover`).
+- **`catalog/models.py`** — add `LOW_STOCK_THRESHOLD = 5` module constant
+  and a `Product.is_low_stock` property (`0 <= self.stock_quantity <
+  LOW_STOCK_THRESHOLD`), replacing the magic number currently inline in
+  `product_detail.html` (`{% if product.stock_quantity < 5 %}`) so the admin
+  and the storefront read off one definition instead of two copies of `5`
+  drifting independently.
+- **`catalog/templates/catalog/product_detail.html`** — swap `{% if
+  product.stock_quantity < 5 %} is-low{% endif %}` for `{% if
+  product.is_low_stock %} is-low{% endif %}` (same rendered output, now
+  backed by the shared property above).
+- **`catalog/admin.py`** — rewritten:
+  - Module-level branding: `admin.site.site_header = 'СантехМаркет'`,
+    `admin.site.site_title = 'СантехМаркет'`, `admin.site.index_title =
+    'Управление магазином'`.
+  - `ProductAdmin`:
+    - `list_display = ('thumbnail', 'name', 'category', 'price',
+      'stock_quantity', 'stock_status')` — `stock_quantity` stays the real
+      model field (so `list_editable` can target it); `stock_status` is a
+      separate readonly method for the color cue. (Django renders
+      `list_editable` columns as plain `<input>` widgets with no hook for
+      conditional CSS classes, so coloring the editable cell itself isn't
+      practical — an adjacent readonly indicator gets the same scannability
+      without fighting the widget.)
+    - `list_display_links = ('name',)` (thumbnail/stock_status aren't link
+      targets; `name` opens the change form).
+    - `list_editable = ('stock_quantity',)` — quick restock without opening
+      the change form.
+    - `list_filter = ('category',)`, `search_fields = ('name',)`.
+    - `thumbnail(self, obj)` — readonly method, `format_html('<img
+      src="{}" style="width:40px;height:40px;object-fit:cover;
+      border-radius:4px;">', obj.image.url)` if `obj.image` else `'—'`
+      (guards products with no uploaded photo).
+    - `stock_status(self, obj)` — readonly method using
+      `obj.is_low_stock`: renders a small colored dot + text (`'● Мало'` in
+      `--color-accent-dark`) when low, (`'● В наличии'` in
+      `--color-success`) otherwise — reuses the exact threshold convention
+      from `models.py` above, doesn't invent a second one.
+    - `image_preview(self, obj)` — readonly method for the change form: same
+      `format_html('<img>')` pattern, larger (`max-width:200px`), `'—'`
+      fallback.
+    - `readonly_fields = ('image_preview',)`; `fields` ordered so
+      `image_preview` renders directly above the `image` upload field
+      (`('name', 'category', 'description', 'price', 'stock_quantity',
+      'image_preview', 'image')`).
+  - `CategoryAdmin`:
+    - `list_display = ('name', 'product_count')`.
+    - `get_queryset(self, request)` — `super().get_queryset(request)
+      .annotate(product_count=Count('product'))` (one query, no N+1; `'
+      product'` is the existing reverse-FK accessor already used by
+      `views.py`'s `home()` for the same annotation — no new convention).
+    - `product_count(self, obj)` — returns `obj.product_count`;
+      `admin_order_field = 'product_count'` (sortable column).
+  - `OrderAdmin` (extends the existing registration):
+    - `list_display = ('customer_name', 'phone', 'created_at', 'item_count',
+      'order_total')`.
+    - `get_queryset(self, request)` — annotates `item_count=Count('items')`
+      and `order_total=Sum(F('items__quantity') * F('items__product__price'),
+      output_field=DecimalField())` in one call (the `items__product` join is
+      many-to-one per item, so it doesn't fan out the `items` join — `Count`
+      and `Sum` over the same join set stay correct together, no double
+      counting).
+    - `item_count`/`order_total` methods return the annotated values, each
+      with a matching `admin_order_field` for sortability.
+    - `date_hierarchy = 'created_at'` (satisfies the filter-by-date ask more
+      usefully than a plain `list_filter` would for a daily-use order log).
+    - `search_fields = ('customer_name', 'phone')`.
+    - `ordering = ('-created_at',)` — newest first by default.
+    - `OrderItemInline` — `fields = ('product', 'quantity', 'subtotal')`,
+      `readonly_fields = ('product', 'subtotal')` (product shouldn't be
+      swapped post-order — that would misrepresent what was actually
+      ordered), `quantity` stays editable (owner may need to correct a count
+      after a customer call), `can_delete = False` (don't let a line
+      disappear from order history by accident), `extra = 0` (no blank
+      rows — these orders are already placed, not being composed). `
+      subtotal(self, obj)` — readonly method, `obj.quantity *
+      obj.product.price` if `obj.pk` else `'—'`.
+  - `OrderItemAdmin` standalone registration — **removed**. A bare list of
+    order-items with no order context isn't a useful lookup surface on its
+    own (an item only makes sense next to the order it belongs to), and it's
+    already fully visible/editable via `OrderItemInline` on `OrderAdmin`.
+    Keeping a second, weaker view of the same data would just be a second
+    place to maintain.
+- **`catalog/tests.py`** — add `AdminTests` covering the computed/annotated
+  logic (per the ticket: the display chrome doesn't need exhaustive
+  coverage, but the count/total math does), using a superuser created via
+  `get_user_model().objects.create_superuser(...)` and the test `Client`
+  logged in against `/admin/`:
+  - `test_category_admin_shows_product_count` — two categories with
+    different product counts; GET `/admin/catalog/category/`; assert each
+    category's correct count renders (catches an N+1-safe annotation vs. a
+    naive per-row count going out of sync).
+  - `test_product_admin_thumbnail_fallback` — one product with an image, one
+    without; GET `/admin/catalog/product/`; assert the no-image product
+    renders the `'—'` fallback and doesn't error.
+  - `test_order_admin_shows_item_count_and_total` — one `Order` with two
+    `OrderItem`s of known `quantity`/`product.price`; GET
+    `/admin/catalog/order/`; assert the rendered page contains the correct
+    item count and a total matching the manually-computed
+    `sum(quantity * price)`.
+  - `test_order_item_inline_subtotal` — GET the order's change page
+    (`/admin/catalog/order/<id>/change/`); assert each inline row's subtotal
+    renders correctly.
+  - `test_order_item_not_separately_registered` — asserts `OrderItem` is
+    *not* in `admin.site._registry` (regression guard for the intentional
+    removal above), while `Category`/`Product`/`Order` are.
+
+### Notes
+
+- No third-party admin theme package (`django-admin-interface`, `jazzmin`,
+  etc.) — `requirements.txt` stays Django + Pillow only, matching the
+  storefront's own "plain CSS, no frontend framework" stance.
+- `admin.css` intentionally does **not** `{% static %}`-include the
+  storefront's `style.css` wholesale — that file's broad element selectors
+  (`body`, `a`, `h1`, …) are written for the public pages' DOM and would
+  collide with Django admin's own. Reusing the brand *values* in a small,
+  admin-scoped stylesheet is the "reuse tokens without re-defining the
+  palette" ask without that collision risk.
+- Validate with `.venv/bin/python manage.py check`, the full
+  `.venv/bin/python manage.py test catalog` suite, and by opening `/admin/`
+  logged in as a superuser: the header bar/links/Save buttons render in
+  brand colors; the product changelist shows thumbnails, a colored stock
+  indicator, and lets you edit `stock_quantity` inline without opening a
+  product; the category changelist shows correct product counts; the order
+  changelist shows item counts/totals matching hand-computed values and
+  defaults to newest-first; an order's change page shows read-only product/
+  subtotal inline rows with an editable quantity; no standalone "Order
+  items" entry appears in the admin index.
+
 ## Environment note
 
 A virtualenv already exists at `.venv`, built with Python 3.11 (not the

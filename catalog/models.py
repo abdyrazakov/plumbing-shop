@@ -1,5 +1,7 @@
 from django.db import models
 
+LOW_STOCK_THRESHOLD = 5
+
 
 class Category(models.Model):
     name = models.CharField(max_length=255)
@@ -18,6 +20,10 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_low_stock(self):
+        return self.stock_quantity < LOW_STOCK_THRESHOLD
 
 
 class Order(models.Model):

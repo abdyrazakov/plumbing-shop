@@ -1,0 +1,69 @@
+/*
+ * Admin chrome reskin: header bar, section/module links, breadcrumbs, and
+ * primary ("Save") buttons only. Brand hex values below are sourced from
+ * catalog/static/catalog/style.css (--color-primary / --color-accent) —
+ * duplicated here rather than shared, since that file's broad element
+ * selectors (body, a, h1, ...) are written for the storefront's own DOM and
+ * would collide with Django admin's layout.
+ */
+:root {
+    --shop-primary: #0f5f66;
+    --shop-primary-dark: #0b474d;
+    --shop-accent: #e07a3f;
+    --shop-accent-dark: #c3602a;
+}
+
+#header {
+    background: var(--shop-primary);
+    color: #fff;
+}
+
+#header a:link, #header a:visited, #logout-form button {
+    color: #fff;
+}
+
+#header a:focus, #header a:hover {
+    color: #fff;
+    text-decoration: underline;
+}
+
+#branding h1, #branding h1 a:link, #branding h1 a:visited {
+    color: #fff;
+}
+
+div.breadcrumbs {
+    background: var(--shop-primary);
+    color: #d9ebec;
+}
+
+div.breadcrumbs a {
+    color: #fff;
+}
+
+div.breadcrumbs a:focus, div.breadcrumbs a:hover {
+    color: var(--shop-accent);
+}
+
+#content-main a:link, #content-main a:visited {
+    color: var(--shop-primary);
+}
+
+#content-main a:focus, #content-main a:hover {
+    color: var(--shop-primary-dark);
+}
+
+.module h2, .module caption, .inline-group h2 {
+    background: var(--shop-primary);
+    color: #fff;
+}
+
+.button.default, input[type=submit].default, .submit-row input.default {
+    background: var(--shop-accent);
+    color: #fff;
+}
+
+.button.default:active, input[type=submit].default:active,
+.button.default:focus, input[type=submit].default:focus,
+.button.default:hover, input[type=submit].default:hover {
+    background: var(--shop-accent-dark);
+}
