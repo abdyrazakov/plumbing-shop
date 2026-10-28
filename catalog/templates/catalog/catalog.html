@@ -1,0 +1,21 @@
+{% extends 'catalog/base.html' %}
+
+{% block title %}{{ category.name }} — СантехМаркет{% endblock %}
+
+{% block content %}
+    <a class="breadcrumb" href="{% url 'home' %}">&larr; Все категории</a>
+    <h1>{{ category.name }}</h1>
+    <div class="product-grid">
+        {% for product in products %}
+            <a class="product-card" href="{% url 'product_detail' product.id %}">
+                <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                <div class="product-card-body">
+                    <div class="product-card-name">{{ product.name }}</div>
+                    <div class="product-card-price">{{ product.price }} сом</div>
+                </div>
+            </a>
+        {% empty %}
+            <p class="empty-state">В этой категории пока нет товаров.</p>
+        {% endfor %}
+    </div>
+{% endblock %}

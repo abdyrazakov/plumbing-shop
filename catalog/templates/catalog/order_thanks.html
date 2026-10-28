@@ -1,0 +1,15 @@
+{% extends 'catalog/base.html' %}
+
+{% block title %}Заявка принята — СантехМаркет{% endblock %}
+
+{% block content %}
+    <div class="success-panel">
+        <div class="success-icon">✓</div>
+        <h1>Заявка принята!</h1>
+        <p>Спасибо, {{ order_request.customer_name }} — мы свяжемся с вами по поводу «{{ order_request.product.name }}».</p>
+        <div class="links">
+            <a href="{% url 'product_detail' order_request.product.id %}">&larr; Вернуться к товару</a>
+            <a href="{% url 'home' %}">&larr; На главную</a>
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends 'catalog/base.html' %}
+
+{% block title %}СантехМаркет — каталог сантехники{% endblock %}
+
+{% block content %}
+    <div class="hero">
+        <h1>Сантехника и материалы для дома</h1>
+        <p>Выберите категорию, найдите нужный товар и оставьте заявку — мы перезвоним и уточним детали.</p>
+    </div>
+    <ul class="category-grid">
+        {% for category in categories %}
+            <li>
+                <a class="category-card" href="{% url 'catalog' category.id %}">
+                    <span class="category-card-name">{{ category.name }}</span>
+                    <span class="category-card-count">{{ category.product_count }} товаров</span>
+                </a>
+            </li>
+        {% empty %}
+            <li class="empty-state">Категорий пока нет.</li>
+        {% endfor %}
+    </ul>
+{% endblock %}

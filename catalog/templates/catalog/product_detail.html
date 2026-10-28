@@ -1,0 +1,33 @@
+{% extends 'catalog/base.html' %}
+
+{% block title %}{{ product.name }} — СантехМаркет{% endblock %}
+
+{% block content %}
+    <a class="breadcrumb" href="{% url 'catalog' product.category.id %}">&larr; {{ product.category.name }}</a>
+    <div class="product-detail">
+        <img src="{{ product.image.url }}" alt="{{ product.name }}">
+        <div class="product-detail-info">
+            <h1>{{ product.name }}</h1>
+            <p class="product-detail-price">{{ product.price }} сом</p>
+            <p>{{ product.description }}</p>
+            <span class="product-detail-stock{% if product.stock_quantity < 5 %} is-low{% endif %}">
+                {% if product.stock_quantity > 0 %}В наличии: {{ product.stock_quantity }} шт.{% else %}Под заказ{% endif %}
+            </span>
+        </div>
+    </div>
+    <div class="order-form">
+        <h2>Оставить заявку</h2>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            {% for field in form %}
+                <div class="order-form-field">
+                    {{ field.label_tag }}
+                    {{ field }}
+                    {{ field.errors }}
+                </div>
+            {% endfor %}
+            <button type="submit" class="btn-primary">Отправить заявку</button>
+        </form>
+    </div>
+{% endblock %}
