@@ -1,8 +1,11 @@
+from django.contrib import messages
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
-from .forms import OrderRequestForm
-from .models import Category, OrderRequest, Product
+from . import cart
+from .forms import AddToCartForm, CheckoutForm
+from .models import Category, Order, OrderItem, Product
 
 CATEGORY_ICONS = {
     'Трубы и фитинги': 'catalog/icons/pipes.jpg',
@@ -28,18 +31,64 @@ def catalog_view(request, category_id):
 
 def product_detail(request, product_id):
     product = get_object_or_404(Product, pk=product_id)
-    if request.method == 'POST':
-        form = OrderRequestForm(request.POST)
-        if form.is_valid():
-            order_request = form.save(commit=False)
-            order_request.product = product
-            order_request.save()
-            return redirect('order_thanks', order_id=order_request.id)
-    else:
-        form = OrderRequestForm()
+    form = AddToCartForm()
     return render(request, 'catalog/product_detail.html', {'product': product, 'form': form})
 
 
+@require_POST
+def add_to_cart(request, product_id):
+    product = get_object_or_404(Product, pk=product_id)
+    form = AddToCartForm(request.POST)
+    quantity = form.cleaned_data['quantity'] if form.is_valid() else 1
+    cart.add(request.session, product.id, quantity)
+    messages.success(request, f'«{product.name}» добавлен в корзину.')
+    return redirect('product_detail', product_id=product.id)
+
+
+def cart_view(request):
+    items = cart.iter_items(request.session)
+    total = cart.grand_total(items)
+
+    if request.method == 'POST' and items:
+        form = CheckoutForm(request.POST)
+        if form.is_valid():
+            order = Order.objects.create(
+                customer_name=form.cleaned_data['customer_name'],
+                phone=form.cleaned_data['phone'],
+            )
+            OrderItem.objects.bulk_create([
+                OrderItem(order=order, product=item.product, quantity=item.quantity)
+                for item in items
+            ])
+            cart.clear(request.session)
+            return redirect('order_thanks', order_id=order.id)
+    else:
+        form = CheckoutForm()
+
+    return render(request, 'catalog/cart.html', {'items': items, 'total': total, 'form': form})
+
+
+@require_POST
+def update_cart_item(request, product_id):
+    product = get_object_or_404(Product, pk=product_id)
+    try:
+        quantity = int(request.POST.get('quantity', ''))
+    except (TypeError, ValueError):
+        messages.error(request, 'Некорректное количество.')
+        return redirect('cart')
+    if quantity < 0:
+        messages.error(request, 'Некорректное количество.')
+        return redirect('cart')
+    cart.update(request.session, product.id, quantity)
+    return redirect('cart')
+
+
+@require_POST
+def remove_cart_item(request, product_id):
+    cart.remove(request.session, product_id)
+    return redirect('cart')
+
+
 def order_thanks(request, order_id):
-    order_request = get_object_or_404(OrderRequest, pk=order_id)
-    return render(request, 'catalog/order_thanks.html', {'order_request': order_request})
+    order = get_object_or_404(Order, pk=order_id)
+    return render(request, 'catalog/order_thanks.html', {'order': order})

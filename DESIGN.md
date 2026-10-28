@@ -501,6 +501,268 @@ treatment across all four cards (no new palette, no per-card styling).
   area, existing `@media (max-width: 640px)` rules still hold since no
   grid-column counts changed).
 
+## Ticket: session-based cart (multi-product checkout)
+
+Replaces the one-product-per-submission order form with a real cart: the
+customer adds several products across browsing, then submits **one**
+combined request from a dedicated `/cart/` page. Cart state lives in the
+Django session (no auth exists or is needed). `OrderRequest` is replaced by
+`Order` + `OrderItem` so one submission can cover multiple products.
+
+### Design direction (from frontend-design skill pass)
+
+Per the ticket, this stays inside the existing token set (teal
+`--color-primary`, orange `--color-accent`, success green, "Source Sans 3",
+`10px` radius, `--shadow`/`--shadow-hover`, `--content-max-width`) — no new
+palette or type scale. The deliberate choice is in how the *new* elements map
+onto that system, since a cart is structurally different from the
+browse/detail pages built so far (a list of owned lines + a running total,
+not a grid of discoverable cards):
+
+- **Cart lines read as a list/receipt, not a second card grid.** Cloning
+  `.product-card`'s per-item border+shadow+hover-lift for cart rows would
+  misrepresent them as browsable/clickable, and would stack N box-shadows on
+  screen at once. Instead: one `.cart` surface panel (card treatment —
+  border, `var(--shadow)`, `var(--radius)` — applied *once* to the whole
+  list), with individual `.cart-line` rows inside separated by a plain
+  `1px solid var(--color-border)` divider (no shadow, no hover elevation per
+  row). Each row: `56px` square thumbnail (reuses the existing
+  `object-fit: cover` + placeholder-fallback pattern from product cards),
+  name + unit price, a quantity `<input type="number">` + small "Обновить"
+  text-button (same visual weight as the breadcrumb link — quiet, not a
+  second primary button), a right-aligned line subtotal in
+  `var(--color-text)` (not primary — primary is reserved for the grand
+  total so that's still the one bold number on the page), and a "Убрать"
+  text-button styled like an understated link in `var(--color-muted)`,
+  brightening to `var(--color-error)` on hover/focus (the one spot a
+  destructive-leaning color appears, and only on interaction).
+- **One grand total, styled like the existing price treatment.** Reuses the
+  `.product-detail-price` idiom (large, `var(--color-primary)`, weight 900)
+  for the "Итого" row at the bottom of the cart list — keeps "the one bold
+  number" consistent with how price already reads elsewhere, rather than
+  inventing a second emphasis style.
+- **Checkout form reuses `.order-form` verbatim** (card, `max-width: 420px`,
+  left-aligned under the cart panel, same field/label/error styling) — just
+  with `customer_name` + `phone` fields now (no `quantity`, that moved to
+  per-line cart management). This is literally the same card tested in two
+  earlier design tickets; no restyling needed.
+- **Empty-cart state reuses `.empty-state`** (the same muted, centered
+  message already used for "no products in this category") plus one
+  `.btn-primary`-styled link back to `{% url 'home' %}` — copy: "Корзина
+  пуста." / "Перейти в каталог" — an empty cart is an invitation to browse,
+  not an error, so no alarm styling.
+- **Header cart link stays plain text, matching `.site-contact`'s existing
+  weight** — no new badge/pill component. Show "Корзина" when empty and
+  "Корзина ({{ count }})" when it has items: the count is informational text
+  inline, not a decorative chip, consistent with the header's current
+  restraint (the only other header element, the phone number, is plain text
+  too). Reuses the header's existing cart-ish stroke-icon convention (same
+  `currentColor`, `stroke-width: 1.8`, 24×24 viewbox as the wrench logo) with
+  a simple basket glyph, placed to the left of the link text.
+- **"Добавить в корзину" on product detail replaces the old order form
+  card** in the same visual slot (`.order-form`-styled card, same position)
+  — the page composition doesn't change, only the form's fields (just a
+  quantity input, default `1`) and its button label/destination.
+
+### Files this ticket touches
+
+- **`catalog/cart.py`** (new) — session-cart helper; nothing outside this
+  module touches `request.session` for cart data. Cart data shape in session:
+  `{str(product_id): quantity}` under one session key (e.g. `'cart'`).
+  - `add(session, product_id, quantity=1)` — increments existing line or
+    creates it.
+  - `update(session, product_id, quantity)` — sets a line to an exact
+    quantity; `quantity <= 0` removes the line.
+  - `remove(session, product_id)` — drops the line if present.
+  - `clear(session)` — empties the cart (called after checkout).
+  - `total_items(session) -> int` — sum of quantities, for the header count.
+  - `iter_items(session) -> list[CartItem]` — one query
+    (`Product.objects.filter(pk__in=...)`) to resolve all product objects at
+    once (no N+1 across lines); returns a small `CartItem` namedtuple/
+    dataclass (`product`, `quantity`, `subtotal`), skipping any product id
+    that no longer exists (defensive against a product being deleted from
+    admin while in someone's cart).
+  - `grand_total(items) -> Decimal` — sums `subtotal` over an `iter_items()`
+    result (takes the already-fetched list, not the session, so callers
+    don't re-query).
+- **`catalog/models.py`** — remove `OrderRequest`; add:
+  - `Order`: `customer_name` (CharField), `phone` (CharField), `created_at`
+    (DateTimeField, `auto_now_add`).
+  - `OrderItem`: `order` (FK → `Order`, `on_delete=CASCADE`,
+    `related_name='items'`), `product` (FK → `Product`,
+    `on_delete=CASCADE`, matching the existing `Product.category` FK
+    convention), `quantity` (PositiveIntegerField) — a point-in-time
+    snapshot of what was ordered, so later edits to `Product.price` don't
+    rewrite history (line pricing at checkout uses `product.price` as read
+    at submission time, not stored separately, since this app has no price
+    history requirement yet).
+- **`catalog/migrations/0002_*.py`** — generated by `makemigrations`
+  (delete `OrderRequest`, create `Order` + `OrderItem`); pre-launch demo
+  data, so a clean replacement migration is fine, no data migration needed.
+- **`catalog/admin.py`** — drop the `OrderRequest` registration; register
+  `Order` with a custom `ModelAdmin` that inlines `OrderItem`
+  (`TabularInline`, `model = OrderItem`, `extra = 0`), `list_display`
+  showing `customer_name`, `phone`, `created_at`; register `OrderItem`
+  separately too per the ticket (plain `admin.site.register(OrderItem)`),
+  for direct lookup alongside the inline view.
+- **`catalog/forms.py`** — remove `OrderRequestForm`; add:
+  - `AddToCartForm(forms.Form)` — `quantity = forms.IntegerField(min_value=1,
+    initial=1)`.
+  - `CheckoutForm(forms.Form)` — `customer_name = forms.CharField(...)`,
+    `phone = forms.CharField(...)`; keep the existing `PHONE_RE` constant and
+    port `clean_phone()` from `OrderRequestForm` unchanged (same regex,
+    same digit-count check, same error message) — this form replaces
+    `OrderRequestForm` as the one place phone validation lives now.
+- **`catalog/views.py`**:
+  - `product_detail(request, product_id)` — drop the `OrderRequestForm`
+    POST handling; on `GET` only, build an unbound `AddToCartForm()` for the
+    quantity input (no POST case here anymore — adding now posts to
+    `add_to_cart`).
+  - `add_to_cart(request, product_id)` (new, POST only) —
+    `get_object_or_404(Product, pk=product_id)` (so an add on a stale/bad id
+    404s instead of silently caching a dead line), validate quantity via
+    `AddToCartForm(request.POST)` (falls back to `1` if missing/invalid —
+    this is a quantity-only add action, not a full form page, so invalid
+    input degrades to the default rather than re-rendering anything),
+    `cart.add(request.session, product.id, quantity)`, add a
+    `django.contrib.messages` success message (e.g. `f'«{product.name}»
+    добавлен в корзину.'`), `redirect('product_detail', product_id=product.id)`
+    — keeps the customer in context per the ticket, using the messages
+    framework already installed in `INSTALLED_APPS`/`MIDDLEWARE`.
+  - `cart_view(request)` (new) — backs `/cart/`:
+    - `GET`: `items = cart.iter_items(request.session)`, `total =
+      cart.grand_total(items)`, unbound `CheckoutForm()`; render
+      `catalog/cart.html`.
+    - `POST`: only meaningful when `items` is non-empty (the checkout form
+      isn't rendered in the empty state, so this guards a crafted/edge
+      request, not a normal path); `CheckoutForm(request.POST)` — if valid:
+      create one `Order`, bulk-create one `OrderItem` per cart line
+      (snapshotting `quantity` from the session cart, not re-reading it
+      later), `cart.clear(request.session)`, `redirect('order_thanks',
+      order_id=order.id)` (PRG). If invalid: re-render `cart.html` with
+      `form` (errors) and the same `items`/`total` (session cart is
+      untouched on an invalid submit, so contents are naturally preserved).
+  - `update_cart_item(request, product_id)` (new, POST only) — reads
+    `quantity` from POST, `cart.update(request.session, product_id,
+    quantity)`, `redirect('cart')`.
+  - `remove_cart_item(request, product_id)` (new, POST only) —
+    `cart.remove(request.session, product_id)`, `redirect('cart')`.
+  - `order_thanks(request, order_id)` — now `get_object_or_404(Order, pk=
+    order_id)`; template iterates `order.items.all()` (via `related_name=
+    'items'`) instead of a single product.
+- **`catalog/urls.py`** — add:
+  - `path('cart/', views.cart_view, name='cart')`
+  - `path('cart/add/<int:product_id>/', views.add_to_cart, name='add_to_cart')`
+  - `path('cart/update/<int:product_id>/', views.update_cart_item, name='update_cart_item')`
+  - `path('cart/remove/<int:product_id>/', views.remove_cart_item, name='remove_cart_item')`
+  - `order_thanks` keeps its existing path/name (now resolves an `Order`).
+- **`catalog/templates/catalog/base.html`** — add a cart link in
+  `.site-header-inner`, next to the existing `.site-contact` link: `<a
+  href="{% url 'cart' %}" class="site-cart">` with the basket SVG + "Корзина"
+  text, count appended when non-zero. Requires a small context processor or
+  per-view context value for the count — simplest: a context processor
+  (`catalog/context_processors.py`, new, registered in
+  `shop/settings.py`'s `TEMPLATES[0]['OPTIONS']['context_processors']`)
+  exposing `cart_item_count` so every page (not just ones that already pass
+  it) can render the header count without every view remembering to add it.
+  Also render `{% if messages %}` near the top of `<body>` (or just above
+  `{% block content %}`) so the `add_to_cart` success message is visible
+  site-wide, not just on one page.
+- **`catalog/templates/catalog/product_detail.html`** — replace the
+  existing `<form>` (customer_name/phone/quantity → "Отправить заявку")
+  with: `<form method="post" action="{% url 'add_to_cart' product.id %}">`,
+  `{% csrf_token %}`, the `AddToCartForm` quantity field, button labeled
+  "Добавить в корзину". Card markup/classes (`.order-form`) unchanged.
+- **`catalog/templates/catalog/cart.html`** (new) — extends `base.html`:
+  - If `items` is empty: `.empty-state` message ("Корзина пуста.") + a
+    `.btn-primary` link to `{% url 'home' %}` ("Перейти в каталог").
+  - Else: `.cart` panel containing one `.cart-line` per item (thumbnail with
+    the existing placeholder-fallback `{% if product.image %}` pattern,
+    name, unit price, a small per-line `<form method="post" action="{% url
+    'update_cart_item' item.product.id %}">` with a quantity number input +
+    "Обновить" button, line `subtotal`, and a separate `<form method="post"
+    action="{% url 'remove_cart_item' item.product.id %}">` with a plain
+    "Убрать" submit button styled as a link) followed by an "Итого:
+    {{ total }} сом" row, then the `CheckoutForm` in an `.order-form` card
+    (`{% csrf_token %}`, `customer_name`/`phone` fields, errors, submit
+    button "Оформить заказ").
+- **`catalog/templates/catalog/order_thanks.html`** — replace the single
+  `«{{ order_request.product.name }}»` line with a loop over
+  `order.items.all()` (`{{ item.product.name }} — {{ item.quantity }} шт.`
+  per line), keep the existing success-icon/panel markup; update the
+  "Вернуться к товару" link (no single product to return to anymore — drop
+  it, keep only "На главную").
+- **`catalog/static/catalog/style.css`** — add `.cart` (surface card:
+  border, `var(--shadow)`, `var(--radius)`), `.cart-line` (flex row, `56px`
+  thumbnail, `1px solid var(--color-border)` divider between rows, no
+  per-row shadow), `.cart-line-thumb` (reuses the existing `object-fit:
+  cover` rule), `.cart-line-qty-form` (inline, small number input +
+  text-button), `.cart-line-subtotal`, `.cart-line-remove` (muted text-
+  button, `:hover`/`:focus` → `var(--color-error)`), `.cart-total` (reuses
+  the `.product-detail-price` size/weight/color idiom), `.site-cart` (plain
+  text link matching `.site-contact`'s weight, inline basket SVG in
+  `currentColor`, same stroke conventions as `.site-logo`).
+- **`catalog/context_processors.py`** (new) — `cart_context(request)`
+  returning `{'cart_item_count': cart.total_items(request.session)}`.
+- **`shop/settings.py`** — register `catalog.context_processors.cart_context`
+  in `TEMPLATES[0]['OPTIONS']['context_processors']`.
+- **`seed_demo.py`** — swap the `OrderRequest` import/delete for `Order`
+  (`Order.objects.all().delete()`; `OrderItem` rows cascade-delete with
+  their `Order`, no separate delete needed).
+- **`catalog/tests.py`** — port every `OrderRequest`-flow test to the new
+  shape rather than dropping coverage:
+  - `ModelTests.test_order_request_created` → `OrderModelTests` /
+    `OrderItemModelTests`: create `Order`, create `OrderItem`(s) against it,
+    assert `created_at` is auto-populated, fields round-trip, `str()` output
+    is sensible.
+  - `AdminRegistrationTests` → assert `Order` and `OrderItem` are in
+    `admin.site._registry` (replacing the `OrderRequest` assertions).
+  - `OrderRequestFormTests` → `CheckoutFormTests` (same valid/invalid phone
+    cases, same blank-`customer_name` case; drop the quantity cases — that
+    field moved) + a small `AddToCartFormTests` (valid quantity, default of
+    `1`, rejects `0`/negative — the quantity validation coverage moves
+    here).
+  - `OrderRequestViewTests` → split into:
+    - `AddToCartViewTests` — POST to `add_to_cart` adds/increments a session
+      cart line and redirects back to `product_detail`; posting a quantity
+      twice accumulates.
+    - `CartViewTests` — `update_cart_item`/`remove_cart_item` POSTs mutate
+      the session cart and redirect to `cart`; `GET /cart/` on an empty cart
+      shows the empty-state copy; with items, shows line subtotals and the
+      grand total.
+    - `CheckoutViewTests` — valid multi-item POST to `cart_view` creates one
+      `Order` with the right number of `OrderItem`s (quantities matching
+      what was in the cart), clears the session cart, redirects to
+      `order_thanks`; invalid POST (bad phone) creates no `Order`, re-renders
+      `cart.html` with errors, and leaves the session cart intact.
+    - `OrderThanksViewTests` — renders every ordered product/quantity for a
+      multi-item `Order`, 404s for a missing order id.
+  - `ViewTests.test_product_detail_shows_order_form` — update assertion to
+    the new button text ("Добавить в корзину").
+  - Leave `CategoryIconTests`, `RuProductCountFilterTests`,
+    `ProductImageFallbackTests`, and the non-order parts of `ModelTests`/
+    `ViewTests` as-is — unaffected by this ticket.
+
+### Notes
+
+- No JS/AJAX — every cart mutation (add/update/remove/checkout) is a plain
+  POST + redirect, consistent with the rest of the site.
+- `update_cart_item`/`remove_cart_item` are POST-only (small forms with a
+  submit button styled as a link), not GET links — mutating state via GET
+  is unsafe (crawlers/prefetchers could empty a cart) even though the
+  ticket's shorthand calls it a "remove link."
+- `OrderItem` doesn't duplicate `product.price` at write time; this app has
+  no price-history requirement yet, so the thanks page and any future
+  reporting read `item.product.price` directly. If prices need to be frozen
+  per-order later, that's a separate ticket (add a `unit_price` field to
+  `OrderItem`).
+- Validate with `python manage.py check`, `makemigrations`/`migrate`, the
+  full `catalog/tests.py` suite, and by clicking through: add two different
+  products to the cart from their detail pages, adjust a quantity, remove a
+  line, submit checkout with a bad phone (errors, cart intact), then submit
+  valid (redirects to an updated thanks page listing both products, cart
+  now empty, header count back to showing no count).
+
 ## Environment note
 
 A virtualenv already exists at `.venv`, built with Python 3.11 (not the

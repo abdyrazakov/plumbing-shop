@@ -10,10 +10,10 @@ import django
 
 django.setup()
 
-from catalog.models import Category, OrderRequest, Product
+from catalog.models import Category, Order, Product
 
 
-OrderRequest.objects.all().delete()
+Order.objects.all().delete()
 Product.objects.all().delete()
 Category.objects.all().delete()
 

@@ -19,10 +19,26 @@
                 </svg>
                 СантехМаркет
             </a>
-            <a href="tel:+996000000000" class="site-contact">+996 (000) 00-00-00</a>
+            <div class="site-header-actions">
+                <a href="tel:+996000000000" class="site-contact">+996 (000) 00-00-00</a>
+                <a href="{% url 'cart' %}" class="site-cart">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M4 7h16l-1.5 11a2 2 0 0 1-2 1.8H7.5a2 2 0 0 1-2-1.8L4 7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                        <path d="M8.5 7a3.5 3.5 0 0 1 7 0" stroke="currentColor" stroke-width="1.8"/>
+                    </svg>
+                    {% if cart_item_count %}Корзина ({{ cart_item_count }}){% else %}Корзина{% endif %}
+                </a>
+            </div>
         </div>
     </header>
     <main class="site-content">
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li class="message{% if message.tags %} message-{{ message.tags }}{% endif %}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
         {% block content %}{% endblock %}
     </main>
     <footer class="site-footer">

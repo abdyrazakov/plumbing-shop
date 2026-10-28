@@ -6,9 +6,13 @@
     <div class="success-panel">
         <div class="success-icon" aria-hidden="true"></div>
         <h1>Заявка принята!</h1>
-        <p>Спасибо, {{ order_request.customer_name }} — мы свяжемся с вами по поводу «{{ order_request.product.name }}».</p>
+        <p>Спасибо, {{ order.customer_name }} — мы свяжемся с вами по поводу вашего заказа:</p>
+        <ul class="order-summary">
+            {% for item in order.items.all %}
+                <li>{{ item.product.name }} — {{ item.quantity }} шт.</li>
+            {% endfor %}
+        </ul>
         <div class="links">
-            <a href="{% url 'product_detail' order_request.product.id %}">&larr; Вернуться к товару</a>
             <a href="{% url 'home' %}">&larr; На главную</a>
         </div>
     </div>

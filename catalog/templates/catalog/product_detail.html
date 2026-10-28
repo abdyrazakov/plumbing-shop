@@ -21,8 +21,8 @@
         </div>
     </div>
     <div class="order-form">
-        <h2>Оставить заявку</h2>
-        <form method="post">
+        <h2>Добавить в корзину</h2>
+        <form method="post" action="{% url 'add_to_cart' product.id %}">
             {% csrf_token %}
             {{ form.non_field_errors }}
             {% for field in form %}
@@ -32,7 +32,7 @@
                     {{ field.errors }}
                 </div>
             {% endfor %}
-            <button type="submit" class="btn-primary">Отправить заявку</button>
+            <button type="submit" class="btn-primary">Добавить в корзину</button>
         </form>
     </div>
 {% endblock %}

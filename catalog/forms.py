@@ -2,20 +2,16 @@ import re
 
 from django import forms
 
-from .models import OrderRequest
-
 PHONE_RE = re.compile(r'^\+?[\d\s\-()]{7,20}$')
 
 
-class OrderRequestForm(forms.ModelForm):
-    class Meta:
-        model = OrderRequest
-        fields = ['customer_name', 'phone', 'quantity']
-        labels = {
-            'customer_name': 'Ваше имя',
-            'phone': 'Телефон',
-            'quantity': 'Количество',
-        }
+class AddToCartForm(forms.Form):
+    quantity = forms.IntegerField(min_value=1, initial=1, label='Количество')
+
+
+class CheckoutForm(forms.Form):
+    customer_name = forms.CharField(max_length=255, label='Ваше имя')
+    phone = forms.CharField(max_length=32, label='Телефон')
 
     def clean_phone(self):
         phone = self.cleaned_data['phone'].strip()
@@ -23,9 +19,3 @@ class OrderRequestForm(forms.ModelForm):
         if not PHONE_RE.match(phone) or not (7 <= digit_count <= 15):
             raise forms.ValidationError('Введите корректный номер телефона.')
         return phone
-
-    def clean_quantity(self):
-        quantity = self.cleaned_data['quantity']
-        if quantity < 1:
-            raise forms.ValidationError('Укажите количество больше нуля.')
-        return quantity

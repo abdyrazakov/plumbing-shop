@@ -20,12 +20,19 @@ class Product(models.Model):
         return self.name
 
 
-class OrderRequest(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+class Order(models.Model):
     customer_name = models.CharField(max_length=255)
     phone = models.CharField(max_length=32)
-    quantity = models.PositiveIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f'{self.customer_name} - {self.product}'
+        return f'{self.customer_name} - {self.created_at:%Y-%m-%d %H:%M}'
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField()
+
+    def __str__(self):
+        return f'{self.product} x{self.quantity}'
