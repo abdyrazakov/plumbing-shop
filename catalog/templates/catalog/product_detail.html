@@ -24,6 +24,7 @@
         <h2>Добавить в корзину</h2>
         <form method="post" action="{% url 'add_to_cart' product.id %}">
             {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
             {{ form.non_field_errors }}
             {% for field in form %}
                 <div class="order-form-field">
@@ -34,5 +35,11 @@
             {% endfor %}
             <button type="submit" class="btn-primary">Добавить в корзину</button>
         </form>
+        {% with wa_text="Здравствуйте! Интересует: "|add:product.name %}
+            <a class="whatsapp-link whatsapp-link-divider" href="https://wa.me/{{ whatsapp_number }}?text={{ wa_text|urlencode }}" target="_blank" rel="noopener">
+                {% include 'catalog/_whatsapp_icon.html' %}
+                Есть вопрос? Написать в WhatsApp
+            </a>
+        {% endwith %}
     </div>
 {% endblock %}

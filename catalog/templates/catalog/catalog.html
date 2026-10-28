@@ -8,17 +8,25 @@
     <h1>{{ category.name }}</h1>
     <div class="product-grid">
         {% for product in products %}
-            <a class="product-card" href="{% url 'product_detail' product.id %}">
-                {% if product.image %}
-                    <img src="{{ product.image.url }}" alt="{{ product.name }}">
-                {% else %}
-                    <img src="{% static 'catalog/icons/placeholder.jpg' %}" alt="{{ product.name }}">
-                {% endif %}
-                <div class="product-card-body">
-                    <div class="product-card-name">{{ product.name }}</div>
-                    <div class="product-card-price">{{ product.price }} сом</div>
-                </div>
-            </a>
+            <div class="product-card">
+                <a class="product-card-link" href="{% url 'product_detail' product.id %}">
+                    {% if product.image %}
+                        <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                    {% else %}
+                        <img src="{% static 'catalog/icons/placeholder.jpg' %}" alt="{{ product.name }}">
+                    {% endif %}
+                    <div class="product-card-body">
+                        <div class="product-card-name">{{ product.name }}</div>
+                        <div class="product-card-price">{{ product.price }} сом</div>
+                    </div>
+                </a>
+                <form method="post" action="{% url 'add_to_cart' product.id %}" class="product-card-quick-add">
+                    {% csrf_token %}
+                    <input type="hidden" name="quantity" value="1">
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <button type="submit" class="btn-ghost">В корзину</button>
+                </form>
+            </div>
         {% empty %}
             <p class="empty-state">В этой категории пока нет товаров.</p>
         {% endfor %}

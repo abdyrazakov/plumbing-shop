@@ -7,8 +7,41 @@
 {% block content %}
     <div class="hero">
         <h1>Сантехника и материалы для дома</h1>
-        <p>Выберите категорию, найдите нужный товар и оставьте заявку — мы перезвоним и уточним детали.</p>
+        <p>Выберите категорию, добавьте нужные товары в корзину и оформите одну заявку — мы перезвоним и уточним детали.</p>
     </div>
+    <ul class="trust-strip">
+        <li class="trust-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M3 10.5 12 4l9 6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M5 10v9h14v-9" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                <path d="M9 19v-5h6v5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+            </svg>
+            Самовывоз со склада в Бишкеке
+        </li>
+        <li class="trust-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M3 7h11v9H3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                <path d="M14 10h3.5L20 13.5V16h-6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                <circle cx="7" cy="18" r="1.6" stroke="currentColor" stroke-width="1.8"/>
+                <circle cx="17" cy="18" r="1.6" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+            Доставка по городу
+        </li>
+        <li class="trust-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M12 3.5 19 6v6c0 4.5-3 7.5-7 8.5-4-1-7-4-7-8.5V6l7-2.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                <path d="M9 12l2 2 4-4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Гарантия на весь товар
+        </li>
+        <li class="trust-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M4 19V8.5A2.5 2.5 0 0 1 6.5 6h11A2.5 2.5 0 0 1 20 8.5V15a2.5 2.5 0 0 1-2.5 2.5H8l-4 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                <path d="M9 11h6M9 14h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            Проконсультируем перед покупкой
+        </li>
+    </ul>
     <ul class="category-grid">
         {% for category in categories %}
             <li>
@@ -26,4 +59,15 @@
             <li class="empty-state">Категорий пока нет.</li>
         {% endfor %}
     </ul>
+    <div class="brand-strip">
+        <p class="brand-strip-label">Бренды, с которыми мы работаем</p>
+        <div class="brand-strip-list">
+            <span class="brand-name">Grohe</span>
+            <span class="brand-name">Hansgrohe</span>
+            <span class="brand-name">Roca</span>
+            <span class="brand-name">Cersanit</span>
+            <span class="brand-name">Ariston</span>
+            <span class="brand-name">Kaiser</span>
+        </div>
+    </div>
 {% endblock %}

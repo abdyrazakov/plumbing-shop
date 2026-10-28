@@ -215,6 +215,65 @@ class AddToCartViewTests(TestCase):
         self.assertEqual(response.status_code, 405)
         self.assertNotIn('cart', self.client.session)
 
+    def test_add_to_cart_with_next_redirects_there(self):
+        next_url = reverse('catalog', args=[self.category.id])
+        response = self.client.post(
+            reverse('add_to_cart', args=[self.product.id]),
+            {'quantity': 1, 'next': next_url},
+        )
+        self.assertRedirects(response, next_url)
+        self.assertEqual(self.client.session['cart'], {str(self.product.id): 1})
+
+    def test_add_to_cart_with_external_next_falls_back_to_product_detail(self):
+        response = self.client.post(
+            reverse('add_to_cart', args=[self.product.id]),
+            {'quantity': 1, 'next': 'https://evil.example.com/'},
+        )
+        self.assertRedirects(response, reverse('product_detail', args=[self.product.id]))
+
+    def test_add_to_cart_without_next_redirects_to_product_detail(self):
+        response = self.client.post(
+            reverse('add_to_cart', args=[self.product.id]),
+            {'quantity': 1},
+        )
+        self.assertRedirects(response, reverse('product_detail', args=[self.product.id]))
+
+
+class CatalogQuickAddViewTests(TestCase):
+    def setUp(self):
+        self.category = Category.objects.create(name='Pipes')
+        self.product = Product.objects.create(
+            name='Copper Pipe',
+            description='1-inch copper pipe',
+            price=Decimal('19.99'),
+            image=SimpleUploadedFile('pipe.jpg', b'fake-image-bytes', content_type='image/jpeg'),
+            category=self.category,
+            stock_quantity=50,
+        )
+
+    def test_catalog_card_renders_quick_add_form_pointing_back_to_catalog(self):
+        catalog_url = reverse('catalog', args=[self.category.id])
+        response = self.client.get(catalog_url)
+        add_url = reverse('add_to_cart', args=[self.product.id])
+        self.assertContains(response, f'action="{add_url}"')
+        self.assertContains(response, f'name="next" value="{catalog_url}"')
+
+    def test_quick_add_from_catalog_redirects_back_to_catalog(self):
+        catalog_url = reverse('catalog', args=[self.category.id])
+        response = self.client.post(
+            reverse('add_to_cart', args=[self.product.id]),
+            {'quantity': 1, 'next': catalog_url},
+        )
+        self.assertRedirects(response, catalog_url)
+        self.assertEqual(self.client.session['cart'], {str(self.product.id): 1})
+
+        followed = self.client.post(
+            reverse('add_to_cart', args=[self.product.id]),
+            {'quantity': 1, 'next': catalog_url},
+            follow=True,
+        )
+        self.assertContains(followed, 'добавлен в корзину')
+
 
 class CartViewTests(TestCase):
     def setUp(self):

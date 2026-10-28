@@ -20,7 +20,11 @@
                 СантехМаркет
             </a>
             <div class="site-header-actions">
-                <a href="tel:+996000000000" class="site-contact">+996 (000) 00-00-00</a>
+                <a href="{{ phone_href }}" class="site-contact">{{ phone_display }}</a>
+                <a href="https://wa.me/{{ whatsapp_number }}" class="site-whatsapp" target="_blank" rel="noopener">
+                    {% include 'catalog/_whatsapp_icon.html' %}
+                    WhatsApp
+                </a>
                 <a href="{% url 'cart' %}" class="site-cart">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <path d="M4 7h16l-1.5 11a2 2 0 0 1-2 1.8H7.5a2 2 0 0 1-2-1.8L4 7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
@@ -42,7 +46,31 @@
         {% block content %}{% endblock %}
     </main>
     <footer class="site-footer">
-        СантехМаркет — сантехника и материалы для дома. Заявки обрабатываются по телефону.
+        <div class="site-footer-inner">
+            <div class="site-footer-col">
+                <h3>О компании</h3>
+                <p>СантехМаркет — склад сантехники и материалов для дома в Бишкеке. Помогаем подобрать и забронировать товар перед покупкой.</p>
+            </div>
+            <div class="site-footer-col">
+                <h3>Контакты</h3>
+                <p>г. Бишкек, ул. Складская, 14</p>
+                <p><a href="{{ phone_href }}">{{ phone_display }}</a></p>
+                <p>
+                    <a href="https://wa.me/{{ whatsapp_number }}" class="whatsapp-link" target="_blank" rel="noopener">
+                        {% include 'catalog/_whatsapp_icon.html' %}
+                        Написать в WhatsApp
+                    </a>
+                </p>
+            </div>
+            <div class="site-footer-col">
+                <h3>Часы работы</h3>
+                <p>Пн-Сб: 9:00–18:00</p>
+                <p>Вс: выходной</p>
+            </div>
+        </div>
+        <div class="site-footer-bottom">
+            СантехМаркет — сантехника и материалы для дома. Заявки обрабатываются по телефону.
+        </div>
     </footer>
 </body>
 </html>

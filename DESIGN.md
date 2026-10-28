@@ -763,6 +763,240 @@ not a grid of discoverable cards):
   valid (redirects to an updated thanks page listing both products, cart
   now empty, header count back to showing no count).
 
+## Ticket: WhatsApp contact, catalog quick-add, home trust/brand strips, footer expansion
+
+Owner-facing convenience/trust ticket, prioritized purchase-flow-first: (1)
+quick-add from the catalog grid removes the single biggest piece of friction
+in the real buying pattern (several products in one visit), (2) WhatsApp
+contact meets Kyrgyzstan customers' actual channel preference, (3) the home
+page trust/brand strips and footer build credibility, (4) a visual pass on
+the three purchase-path views picks up anything that still reads templated.
+Same established token set throughout (teal `--color-primary`, orange
+`--color-accent`, success green, "Source Sans 3", `10px` radius,
+`--shadow`/`--shadow-hover`, `--content-max-width`) — one new token added
+(WhatsApp's own brand green, used only for that glyph). Consulted
+`frontend-design` for direction before touching template/CSS.
+
+### Design direction (from frontend-design skill pass)
+
+- **New token**: `--color-whatsapp: #25d366` (WhatsApp's own brand green) —
+  used exclusively for the WhatsApp glyph/link; not folded into the existing
+  teal/orange/success triad since it's a third-party brand mark, not a site
+  accent. Everything else in this ticket stays inside existing tokens.
+- **WhatsApp link**: a quiet inline link (icon + short text), not a button —
+  the site already spends its one bold CTA per page on `.btn-primary`
+  ("Добавить в корзину" / "Оформить заказ"); a second loud button next to it
+  would dilute that. Icon is a simple inline SVG WhatsApp glyph (outline
+  speech-bubble + handset motif, single `--color-whatsapp` fill, ~18–20px) —
+  the one spot on the page that intentionally breaks from
+  `currentColor`/stroke-only icons, because it's a recognizable brand mark,
+  not a site icon. Header placement: directly beside the existing phone link
+  in `.site-header-actions`, same light text color/weight as `.site-contact`
+  so it reads as "another way to reach us," not a separate call to action.
+  Product-detail placement: one quiet line below the add-to-cart button
+  inside the same `.order-form` card, separated by a thin top divider —
+  physically near the primary action (per the ticket) but visually
+  subordinate to it.
+- **Catalog quick-add**: the biggest structural change on the grid. The card
+  stops being a single `<a>` (an interactive `<form>`/button can't legally
+  nest inside an interactive `<a>`) and becomes a `<div class="product-card">`
+  containing an inner `<a class="product-card-link">` wrapping the
+  image+name+price (click-through still works everywhere it used to), plus a
+  `<form class="product-card-quick-add">` as a sibling at the bottom of the
+  card. The quick-add button is intentionally **not** another `.btn-primary`
+  — a grid of a dozen solid-orange buttons would turn the whole catalog page
+  into noise and compete with the one primary CTA idiom already established
+  on product detail/cart. New small outline/ghost button style instead:
+  1px `var(--color-primary)` border, `var(--color-primary)` text, transparent
+  background, filling to a light primary tint on hover — compact, inline
+  with the price rather than full-width, so it reads as a secondary,
+  always-available action per card rather than a loud per-card CTA.
+- **Trust strip** (home, between hero and category grid): explicitly *not*
+  another row of white bordered/shadowed cards — four already-adjacent
+  sections (hero, trust strip, category grid, brand strip) all doing the
+  "SaaS card" treatment would flatten the hierarchy the hero and category
+  cards currently have. Instead: a plain horizontal band, same page
+  background (no surface/shadow/border-radius), delimited top and bottom by a
+  single `1px solid var(--color-border)` hairline so it still reads as a
+  distinct section. Four items in a row (wrap to 2-up then 1-up at narrower
+  widths, reusing the existing `auto-fit`/stack responsive pattern), each a
+  small `--color-primary` line icon beside its short label — icon left, text
+  right, no boxes, no numbering (these are four independent facts, not a
+  sequence, so no "01/02/03" markers).
+- **Brand strip** (home, after category grid): a muted, typographic row, not
+  a logo carousel — these are real companies' names rendered as plain
+  styled text, deliberately avoiding both (a) fabricated/implied logo marks
+  and (b) the tracked-out-all-caps "eyebrow label" cliché. Names stay in
+  their natural case (Grohe, Hansgrohe, Roca, Cersanit, Ariston, Kaiser),
+  `var(--color-muted)`, weight 600, separated by a thin `var(--color-border)`
+  vertical divider between entries, wrapping on narrow widths — quiet enough
+  to read as "who we stock," not a decorated feature.
+- **Footer**: grows from a single centered line into a 3-column band (о
+  компании / контакты incl. phone+WhatsApp / часы работы), structured like
+  the existing `.site-header-inner`/`.site-content` pattern — a
+  `max-width: var(--content-max-width)` inner wrapper, left-aligned columns,
+  collapsing to one column at the existing `640px` breakpoint. A thin
+  top-bordered line below the columns carries the short copyright/tagline
+  text that's there today, so nothing existing is deleted, only extended.
+- **Nothing further changes on the catalog grid/product detail/cart beyond
+  what this ticket's new elements require** — the grid sizing, stock badge,
+  category photo bands, and column balance from rounds 2–3 already read as
+  intentional and aren't revisited.
+
+### Files this ticket touches
+
+- **`catalog/context_processors.py`** — add `site_contact(request)`
+  returning `{'whatsapp_number': WHATSAPP_NUMBER, 'phone_display': '+996
+  (000) 00-00-00', 'phone_href': 'tel:+996000000000'}`; module-level
+  `WHATSAPP_NUMBER = '996000000000'` constant (same all-placeholder-digits
+  convention as the existing phone number) so the header, product detail,
+  and footer all render from one source instead of three hardcoded copies.
+- **`shop/settings.py`** — register
+  `'catalog.context_processors.site_contact'` in
+  `TEMPLATES[0]['OPTIONS']['context_processors']`, alongside the existing
+  `cart_context`.
+- **`catalog/views.py`**:
+  - `add_to_cart(request, product_id)` — after `cart.add(...)`, resolve the
+    redirect target from the hidden `next` POST field instead of hardcoding
+    `product_detail`: read `request.POST.get('next', '')`, validate it with
+    `django.utils.http.url_has_allowed_host_and_scheme(next_url,
+    allowed_hosts={request.get_host()}, require_https=request.is_secure())`
+    — only redirect there if present *and* safe; otherwise fall back to the
+    existing `redirect('product_detail', product_id=product.id)`. This is
+    the one security-relevant piece of this ticket (an unvalidated `next`
+    would be an open-redirect vector) and is why the fallback stays the
+    default rather than trusting the field blindly.
+  - No other view changes — `catalog_view`/`product_detail` don't need new
+    context; the `next` value and WhatsApp message text are both built in
+    the templates (the `request` context processor is already registered in
+    `settings.py`, so `request.path` is available everywhere).
+- **`catalog/templates/catalog/base.html`**:
+  - Add a WhatsApp link in `.site-header-actions`, right next to
+    `.site-contact`: `<a href="https://wa.me/{{ whatsapp_number }}"
+    class="site-whatsapp">` with the inline WhatsApp SVG + "WhatsApp" text,
+    same weight/position as the phone link.
+  - Expand `<footer class="site-footer">` into the 3-column structure: a
+    `.site-footer-inner` wrapper with `.site-footer-col` for "О компании"
+    (short blurb), "Контакты" (address placeholder `г. Бишкек, ул.
+    Складская, 14`, the existing `tel:` link, and a repeated WhatsApp link
+    using the same `.whatsapp-link` treatment as product detail), and "Часы
+    работы" (`Пн-Сб: 9:00–18:00, Вс: выходной`); keep the current copyright
+    sentence as a `.site-footer-bottom` line below the columns.
+- **`catalog/templates/catalog/home.html`** — insert `.trust-strip` (four
+  `.trust-item`s: icon + "Самовывоз со склада в Бишкеке" / "Доставка по
+  городу" / "Гарантия на весь товар" / "Проконсультируем перед покупкой")
+  between `.hero` and `.category-grid`; insert `.brand-strip` (small label
+  "Бренды, с которыми мы работаем" + `.brand-strip-list` of six
+  `.brand-name` spans: Grohe, Hansgrohe, Roca, Cersanit, Ariston, Kaiser)
+  after `.category-grid`.
+- **`catalog/templates/catalog/catalog.html`** — restructure each product
+  card: `<div class="product-card">` wrapping `<a class="product-card-link"
+  href="{% url 'product_detail' product.id %}">` (image + `.product-card-body`
+  name/price, unchanged) followed by a sibling `<form method="post"
+  action="{% url 'add_to_cart' product.id %}" class="product-card-quick-add">`
+  containing `{% csrf_token %}`, `<input type="hidden" name="quantity"
+  value="1">` (explicit, so quick-add never depends on the view's
+  invalid-form-defaults-to-1 fallback), `<input type="hidden" name="next"
+  value="{{ request.path }}">`, and a submit button labeled "В корзину"
+  styled with the new ghost-button class.
+- **`catalog/templates/catalog/product_detail.html`** — add `<input
+  type="hidden" name="next" value="{{ request.path }}">` to the existing
+  add-to-cart form (preserves today's behavior: product detail still
+  redirects back to itself); below the submit button, add the WhatsApp
+  secondary action: `{% with wa_text="Здравствуйте! Интересует: "|add:product.name %}<a
+  class="whatsapp-link" href="https://wa.me/{{ whatsapp_number
+  }}?text={{ wa_text|urlencode }}">` + WhatsApp SVG + "Есть вопрос? Написать
+  в WhatsApp"`{% endwith %}`.
+- **`catalog/static/catalog/style.css`**:
+  - `--color-whatsapp: #25d366;` token.
+  - `.site-whatsapp` — same rules as `.site-contact` (color, size, no
+    decoration) plus `display: inline-flex; align-items: center; gap:
+    0.4rem;` for the icon; `.site-whatsapp svg { color:
+    var(--color-whatsapp); }`.
+  - `.whatsapp-link` — quiet inline link (icon + text), `color:
+    var(--color-text)`, `text-decoration: none`, `:hover` underline; icon
+    `color: var(--color-whatsapp)`; used on both product detail and the
+    footer contact column, with a `margin-top`/`border-top:
+    1px solid var(--color-border)` divider variant when it follows the
+    order-form submit button.
+  - `.product-card` (now a `<div>`) keeps its existing
+    border/radius/shadow/hover-lift rules unchanged; `.product-card-link`
+    carries the `text-decoration: none; color: inherit;` that used to live
+    on the card itself; `.product-card-quick-add` — flex row, `padding:
+    0 1rem 1rem;`, button right-aligned next to nothing else (card has no
+    other footer content).
+  - `.btn-ghost` (new) — small compact button: `border: 1px solid
+    var(--color-primary); color: var(--color-primary); background: none;
+    padding: 0.4rem 0.9rem; border-radius: 7px; font-size: 0.85rem;
+    font-weight: 600; cursor: pointer;`; `:hover` → `background:
+    var(--color-success-tint)`-style light tint using a new
+    `--color-primary`-based tint, or simply `background: #eaf3f4;` (a light
+    teal tint analogous to the existing success tint) with `color:
+    var(--color-primary-dark)`.
+  - `.trust-strip` — `display: flex; flex-wrap: wrap; gap: 1.5rem 2rem;
+    padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid
+    var(--color-border); border-bottom: 1px solid var(--color-border);`;
+    `.trust-item` — `display: flex; align-items: center; gap: 0.6rem;
+    flex: 1 1 220px;`; `.trust-item svg { color: var(--color-primary);
+    flex-shrink: 0; }`.
+  - `.brand-strip` — `margin: 2rem 0;`; `.brand-strip-label` — `color:
+    var(--color-muted); font-size: 0.95rem; margin-bottom: 0.75rem;`;
+    `.brand-strip-list` — `display: flex; flex-wrap: wrap; gap: 0 1.25rem;`;
+    `.brand-name` — `color: var(--color-muted); font-weight: 600; padding-left:
+    1.25rem; border-left: 1px solid var(--color-border);`, with `:first-child`
+    dropping the border/padding.
+  - `.site-footer` restructure — drop the current `text-align: center;
+    padding: 1.5rem;` single-line rule; add `.site-footer-inner { max-width:
+    var(--content-max-width); margin: 0 auto; padding: 2.5rem 1.5rem 1.5rem;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem;
+    text-align: left; }`, `.site-footer-col h3` (small heading style, e.g.
+    `font-size: 0.95rem; margin: 0 0 0.6rem;`), `.site-footer-col p`
+    (muted, `font-size: 0.9rem;`), `.site-footer-bottom { border-top: 1px
+    solid var(--color-border); text-align: center; padding: 1rem 1.5rem;
+    color: var(--color-muted); font-size: 0.85rem; }`.
+  - `@media (max-width: 640px)` — add `.trust-strip { flex-direction:
+    column; }`, `.site-footer-inner { grid-template-columns: 1fr; }`.
+- **`catalog/tests.py`**:
+  - Extend `AddToCartViewTests` with: a POST including `next` set to the
+    catalog URL (`reverse('catalog', args=[category.id])`) redirects there,
+    not to `product_detail`; a POST including `next` set to an external URL
+    (`'https://evil.example.com/'`) falls back to `product_detail` (open-
+    redirect guard); a POST with no `next` field still redirects to
+    `product_detail` as before (regression guard for the existing
+    product-detail flow).
+  - New `CatalogQuickAddViewTests` — `GET` the catalog URL and assert each
+    product card renders a form `action` pointing at `add_to_cart` for that
+    product's id with a hidden `next` input equal to the catalog page's own
+    URL; `POST` to `add_to_cart` with `quantity=1` and `next` set to the
+    catalog URL (simulating the card's quick-add form) adds one line to the
+    session cart, redirects back to the catalog page (not product detail),
+    and the response (followed) contains the success message.
+
+### Notes
+
+- No new image assets, icon libraries, or JS — inline SVG glyphs and plain
+  CSS throughout, consistent with the rest of the site; the WhatsApp glyph
+  is the only element breaking from pure `currentColor` icons, and only
+  because it's a recognizable third-party brand mark.
+- Brand names are rendered as plain text, not logos — don't generate or
+  imply official brand marks for Grohe/Hansgrohe/Roca/Cersanit/Ariston/Kaiser.
+- `url_has_allowed_host_and_scheme` is required on the `next` field — never
+  redirect to an unvalidated POST value, since that's a classic open-redirect
+  vector.
+- Validate with `python manage.py check`, the full `catalog/tests.py` suite,
+  and by clicking through: home (trust strip and brand strip render between
+  hero/category grid and after it), catalog (quick-add a product directly
+  from its card, land back on the same catalog page with a success message,
+  header cart count increments), product detail (WhatsApp link opens
+  `wa.me` with the product name in the prefilled text, add-to-cart still
+  redirects to itself as before), cart (unaffected, still totals correctly
+  across quick-added and detail-added lines), footer (three columns at a
+  wide viewport, stacked at a narrow one), and the full purchase path end to
+  end: home → catalog → quick-add two different products from their cards →
+  product detail → add-to-cart a third product → `/cart/` shows three
+  correct line items/quantities/total → checkout → `order_thanks` lists all
+  three → cart empty afterward.
+
 ## Environment note
 
 A virtualenv already exists at `.venv`, built with Python 3.11 (not the
