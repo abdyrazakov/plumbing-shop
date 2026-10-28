@@ -1,4 +1,5 @@
 {% extends 'catalog/base.html' %}
+{% load static %}
 
 {% block title %}{{ category.name }} — СантехМаркет{% endblock %}
 
@@ -8,7 +9,11 @@
     <div class="product-grid">
         {% for product in products %}
             <a class="product-card" href="{% url 'product_detail' product.id %}">
-                <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                {% if product.image %}
+                    <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                {% else %}
+                    <img src="{% static 'catalog/icons/placeholder.jpg' %}" alt="{{ product.name }}">
+                {% endif %}
                 <div class="product-card-body">
                     <div class="product-card-name">{{ product.name }}</div>
                     <div class="product-card-price">{{ product.price }} сом</div>

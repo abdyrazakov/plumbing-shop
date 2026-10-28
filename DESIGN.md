@@ -171,6 +171,215 @@ on `product_detail`.
 - Run with `.venv/bin/python manage.py test catalog` (see Environment
   note below for why the venv matters).
 
+## Ticket: visual fixes from Designer review (VISUAL: FAIL)
+
+Designer reviewed screenshots of home/catalog/product/thanks and flagged four
+concrete defects. This ticket fixes all four without re-skinning the site —
+the existing visual language (teal `--color-primary` `#0f5f66`, orange
+`--color-accent` `#e07a3f`, "Source Sans 3", `10px` radius, existing
+`--shadow`/`--shadow-hover`) stays; only the flagged elements change. Consulted
+`frontend-design` for direction before touching any template/CSS; the
+resulting choices below stay inside the current palette/type system rather
+than introducing a new one, since only these four elements were flagged.
+
+### Design direction (from frontend-design skill pass)
+
+- **New/adjusted tokens in `style.css`** (additive, no existing var renamed):
+  - `--color-success: #3f7a56` — single success color, replacing the two
+    inconsistent greens currently hardcoded (`#4a7c59` on the thanks badge,
+    `#2f6b45`/`#e8f3ec` on the in-stock pill); both should read off this one
+    var (plus a light tint for backgrounds, e.g. `--color-success-tint:
+    #e7f2ea`).
+  - `--color-placeholder-bg: #dde3e8` / `--color-placeholder-icon: #96a3af` —
+    a neutral slate pair, deliberately *not* teal or orange, so placeholder
+    images read as "no photo yet" rather than as a branded/decorative tile.
+  - `--content-max-width: 1160px` — one var, used by both
+    `.site-header-inner` and `.site-content` (currently both hardcode
+    `1080px` separately). Modest bump, not a full-bleed redesign — gives the
+    heavier category cards/icons room on wide screens while keeping line
+    lengths reasonable.
+- **Thanks-page badge**: the bare `✓` text glyph is the one bold moment on
+  that page (per "spend your boldness in one place") — make it a real
+  anchor: a `72px` circle in `--color-success`, checkmark drawn as two
+  `::before`/`::after` bars (rotated rectangles, classic CSS-checkmark
+  technique) in white — no Unicode glyph, no font rendering risk. Give it
+  one deliberate shadow (`0 6px 18px rgba(63,122,86,.35)`) since this is the
+  single spot on the page that earns one, and tighten the margin to the
+  heading so it reads as anchoring it, not floating above it.
+- **Home category cards**: add an icon tile (44–48px rounded square, tinted
+  `--color-primary` background, a single consistent inline SVG glyph in
+  `currentColor` — reuse the wrench/droplet motif already in the header
+  logo rather than inventing a second icon family) above the category name.
+  Restyle the existing `category.product_count` line (already in context —
+  `views.py`'s `home()` already annotates it via `Count('product')`, no
+  view change needed) as a small styled line instead of plain muted text.
+  Extend the existing `:hover` transition to also shift the icon tile
+  toward the accent color, on top of the current lift/shadow, so hover
+  reads as one coordinated state change, not a bolt-on.
+- **Placeholder images** (`seed_demo.py`): drop the PIL text rendering
+  entirely. Draw a flat `--color-placeholder-bg`-tint rounded rect with a
+  simple centered "image placeholder" glyph in `--color-placeholder-icon`
+  (basic shapes only — e.g. a frame + small circle + triangle, the
+  conventional "image" icon) — no product name, no font dependency.
+- **Shared container**: `base.html`'s `.site-content` already centers via
+  `margin: 0 auto`, but it and `.site-header-inner` each hardcode their own
+  `1080px` — consolidate both onto the one `--content-max-width` var so
+  there's a single source of truth all four pages inherit, and audit
+  `product_detail.html` (`.product-detail` grid, `.order-form` max-width)
+  and `order_thanks.html` (`.success-panel` max-width) to confirm their
+  inner elements sit inside that shared shell rather than pinning narrow
+  content to the left edge of it.
+
+### Files this ticket touches
+
+- **`catalog/static/catalog/style.css`** — add the tokens above; consolidate
+  `.site-header-inner`/`.site-content` onto `--content-max-width`;
+  redesign `.category-card` (icon tile, restyled count line, coordinated
+  hover state); replace `.success-panel .success-icon`'s glyph rendering
+  with a CSS-only checkmark (`::before`/`::after`) and size/shadow per
+  above; add placeholder-tint styling if the `<img>` needs a fallback frame
+  (optional — primary fix is in `seed_demo.py`, see below).
+- **`catalog/templates/catalog/home.html`** — add the inline SVG icon
+  markup inside each `.category-card`, before `.category-card-name`; wrap
+  `category.product_count` in the restyled count element. No new context
+  needed from the view.
+- **`catalog/templates/catalog/order_thanks.html`** — replace
+  `<div class="success-icon">✓</div>` with CSS-only badge markup (empty
+  element(s) for the `::before`/`::after` bars, no Unicode character).
+- **`catalog/templates/catalog/base.html`** — no structural change beyond
+  whatever the `--content-max-width` consolidation requires; confirm both
+  `.site-header-inner` and `.site-content` reference the shared var.
+- **`seed_demo.py`** — rewrite `placeholder_image()`: drop `ImageFont`/
+  `FONT_PATH`/`draw.text(...)` entirely; draw the flat-tint rect + simple
+  icon-style glyph instead (PIL shape primitives only, no text, no font
+  file dependency). After the change, **re-run it**
+  (`.venv/bin/python seed_demo.py`) so the existing demo products' stored
+  images are regenerated with the new placeholder — it already deletes and
+  recreates all `OrderRequest`/`Product`/`Category` rows, so this is safe to
+  re-run as-is.
+
+### Notes
+
+- No new image assets, icon libraries, or JS — inline SVG / CSS-drawn
+  glyphs only, consistent with the rest of the site.
+- Keep the palette/type system as-is; this ticket is corrective (4 named
+  defects), not a re-skin.
+- Validate by rendering all four pages (home, catalog, product detail,
+  thanks) at both a wide viewport (confirm the centered container no longer
+  reads as left-pinned with dead space) and a narrow one (confirm the
+  existing `@media (max-width: 640px)` rules still hold), and by re-running
+  `seed_demo.py` and opening a product detail/catalog page to confirm the
+  new placeholder renders instead of the old text-in-box version.
+
+## Ticket: round-2 visual fixes from Designer review (VISUAL: FAIL)
+
+A follow-up review of the ticket-4 fixes flagged five more concrete defects,
+confirmed against real screenshots of home/catalog/product/thanks with
+seeded data (see `design_review/*.png`). Corrective only — same palette/type
+system as before (teal `--color-primary`, orange `--color-accent`, "Source
+Sans 3", `10px` radius, existing `--shadow`/`--shadow-hover`). Consulted
+`frontend-design` before touching template/CSS; because this is a corrective
+pass on an already-established system (not a new design), the direction is
+to keep every fix inside the existing token set and only touch the five
+flagged elements — no new palette, no new type scale.
+
+### Design direction (from frontend-design skill pass)
+
+- **Category icons are real photos, not glyphs** — `pipes.jpg`/`faucet.jpg`/
+  `toilet.jpg`/`heater.jpg` carry their own color/lighting, so the old
+  "24px `currentColor` SVG in a 46px tinted tile" treatment (designed for a
+  flat single-color glyph) doesn't fit. Drop the tint-background-on-hover
+  trick entirely; treat the icon tile as a small photo thumbnail instead —
+  bump it to a `56px` rounded-`8px` square, `object-fit: cover`, plain
+  `var(--color-border)` outline so it reads as a product photo chip, not a
+  colored icon. The card's existing lift+shadow hover (`:hover` → `translateY(-2px)`
+  + `--shadow-hover`) is enough of a hover state on its own; no
+  icon-specific hover change needed once the icon is a photo.
+- **Placeholder swap stays purely structural** — no new visual treatment to
+  design; `placeholder.jpg` already exists and matches the
+  `--color-placeholder-bg`/`--color-placeholder-icon` pair from the prior
+  ticket. This is a wiring fix (static fallback instead of a per-product
+  generated file), not a new design decision.
+- **Pluralization and dead-space fixes are non-visual/structural** — no new
+  tokens; the footer gap is fixed by making the footer stick to the bottom
+  of the viewport for short pages (classic sticky-footer flex pattern)
+  rather than leaving the page's gray background end abruptly above a
+  blank browser background, which is what currently reads as a "dead gap."
+- **Order-form column alignment**: the form card's independent
+  `margin: 0 auto` is the bug — it should simply inherit the container's
+  left edge like `.product-detail` already does, not be centered as its own
+  unit. Drop the auto-centering; keep its existing `max-width: 420px` so it
+  doesn't stretch full-width on desktop.
+
+### Files this ticket touches
+
+- **`catalog/views.py`** — add a module-level `CATEGORY_ICONS` dict mapping
+  each seeded category name to a static-relative icon path (e.g.
+  `'Трубы и фитинги': 'catalog/icons/pipes.jpg'`, …, `'Водонагреватели':
+  'catalog/icons/heater.jpg'`), with `'catalog/icons/placeholder.jpg'` as
+  the fallback for any unmapped name. In `home()`, materialize the
+  annotated queryset to a list and set `category.icon_file =
+  CATEGORY_ICONS.get(category.name, 'catalog/icons/placeholder.jpg')` on
+  each before passing to the template (mirrors how `product_count` is
+  already computed in the view rather than the template).
+- **`catalog/templatetags/__init__.py`** (new) — empty, makes
+  `catalog/templatetags` a package.
+- **`catalog/templatetags/catalog_extras.py`** (new) — one template filter,
+  e.g. `ru_product_count(count)`, implementing Russian numeral agreement
+  (1, 21, 31… → "N товар"; 2–4, 22–24… → "N товара"; 0, 5–20, 25–30… → "N
+  товаров"; standard `n % 10` / `n % 100` exceptions for the 11–14 teens
+  case) and returning the full "N товар(а/ов)" string ready to render.
+- **`catalog/templates/catalog/home.html`** — add `{% load static %}` and
+  `{% load catalog_extras %}`; replace the inline wrench `<svg>` in
+  `.category-card-icon` with `<img src="{% static category.icon_file %}"
+  alt="">`; replace `{{ category.product_count }} товаров` with `{{
+  category.product_count|ru_product_count }}`.
+- **`catalog/templates/catalog/catalog.html`** — wrap the product-card
+  `<img src="{{ product.image.url }}">` in `{% if product.image %}...{%
+  else %}<img src="{% static 'catalog/icons/placeholder.jpg' %}"
+  alt="{{ product.name }}">{% endif %}`; add `{% load static %}` at top.
+- **`catalog/templates/catalog/product_detail.html`** — same `{% if
+  product.image %}` fallback around the detail-page `<img>`; add `{% load
+  static %}` at top.
+- **`catalog/static/catalog/style.css`**:
+  - `.category-card-icon` — resize to `56px`/`border-radius: 8px`, drop the
+    `background`/`color` tint and the `:hover` color-shift rule (photo tile
+    now, not a glyph tile); add `object-fit: cover` sizing for its `img`
+    child (replaces the old `svg` sizing rule).
+  - Sticky footer: `html, body { height: 100%; }`; `body` gets `display:
+    flex; flex-direction: column; min-height: 100vh;` (in addition to its
+    existing rules); `.site-content` gets `flex: 1 0 auto;`; `.site-footer`
+    gets `flex-shrink: 0;` and drops/keeps `margin-top` as needed now that
+    flex handles the push (footer sits at the true bottom of the viewport
+    for short pages instead of a blank strip appearing below it).
+  - `.order-form` — remove `margin: 0 auto;` (keep `max-width: 420px;`) so
+    it sits at the container's left edge like `.product-detail` above it;
+    the existing `@media (max-width: 640px)` rule that sets `.order-form {
+    max-width: none; }` needs no change.
+- **`seed_demo.py`** — delete `placeholder_image()` and its
+  `PLACEHOLDER_BG`/`PLACEHOLDER_ICON`/`PIL ImageDraw` usage entirely (no
+  Pillow dependency needed for this script anymore); in the product-creation
+  loop, drop the `product.image.save(...)` call so `Product.image` stays
+  blank for all demo products. Re-run after the change
+  (`.venv/bin/python seed_demo.py`) — it already deletes/recreates all rows,
+  so this is safe to re-run as-is.
+
+### Notes
+
+- No new image assets beyond the five `.jpg` files already in
+  `catalog/static/catalog/icons/` (pre-generated, already present per this
+  ticket's description) — nothing to generate.
+- `Product.image` (the `ImageField`) and `Pillow`/`requirements.txt` are
+  unchanged — the field still exists for real product photos uploaded via
+  admin; only the demo-seed path stops populating it.
+- Validate by re-running `seed_demo.py` and rendering all four pages: home
+  (four distinct category photos, correct "товар/товара/товаров" forms,
+  footer flush with no dead gray gap at common viewport heights like
+  `1280×800`), catalog + product detail (static placeholder image, not the
+  old mountain/circle glyph, for every demo product since none have a real
+  photo), product detail (order-form card left-aligned under the product
+  image/info block, not independently centered).
+
 ## Environment note
 
 A virtualenv already exists at `.venv`, built with Python 3.11 (not the

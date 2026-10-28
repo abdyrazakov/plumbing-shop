@@ -1,11 +1,16 @@
 {% extends 'catalog/base.html' %}
+{% load static %}
 
 {% block title %}{{ product.name }} — СантехМаркет{% endblock %}
 
 {% block content %}
     <a class="breadcrumb" href="{% url 'catalog' product.category.id %}">&larr; {{ product.category.name }}</a>
     <div class="product-detail">
-        <img src="{{ product.image.url }}" alt="{{ product.name }}">
+        {% if product.image %}
+            <img src="{{ product.image.url }}" alt="{{ product.name }}">
+        {% else %}
+            <img src="{% static 'catalog/icons/placeholder.jpg' %}" alt="{{ product.name }}">
+        {% endif %}
         <div class="product-detail-info">
             <h1>{{ product.name }}</h1>
             <p class="product-detail-price">{{ product.price }} сом</p>

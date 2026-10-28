@@ -4,7 +4,7 @@
 
 {% block content %}
     <div class="success-panel">
-        <div class="success-icon">✓</div>
+        <div class="success-icon" aria-hidden="true"></div>
         <h1>Заявка принята!</h1>
         <p>Спасибо, {{ order_request.customer_name }} — мы свяжемся с вами по поводу «{{ order_request.product.name }}».</p>
         <div class="links">

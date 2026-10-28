@@ -4,9 +4,19 @@ from django.shortcuts import get_object_or_404, redirect, render
 from .forms import OrderRequestForm
 from .models import Category, OrderRequest, Product
 
+CATEGORY_ICONS = {
+    'Трубы и фитинги': 'catalog/icons/pipes.jpg',
+    'Смесители': 'catalog/icons/faucet.jpg',
+    'Унитазы и раковины': 'catalog/icons/toilet.jpg',
+    'Водонагреватели': 'catalog/icons/heater.jpg',
+}
+DEFAULT_CATEGORY_ICON = 'catalog/icons/placeholder.jpg'
+
 
 def home(request):
-    categories = Category.objects.annotate(product_count=Count('product'))
+    categories = list(Category.objects.annotate(product_count=Count('product')))
+    for category in categories:
+        category.icon_file = CATEGORY_ICONS.get(category.name, DEFAULT_CATEGORY_ICON)
     return render(request, 'catalog/home.html', {'categories': categories})
 
 

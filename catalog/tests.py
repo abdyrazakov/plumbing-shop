@@ -7,6 +7,8 @@ from django.urls import reverse
 
 from .forms import OrderRequestForm
 from .models import Category, OrderRequest, Product
+from .templatetags.catalog_extras import ru_product_count
+from .views import CATEGORY_ICONS, DEFAULT_CATEGORY_ICON
 
 
 class ModelTests(TestCase):
@@ -219,3 +221,76 @@ class OrderRequestViewTests(TestCase):
     def test_order_thanks_404_for_missing_order(self):
         response = self.client.get(reverse('order_thanks', args=[999]))
         self.assertEqual(response.status_code, 404)
+
+
+class RuProductCountFilterTests(TestCase):
+    def test_singular_form(self):
+        self.assertEqual(ru_product_count(1), '1 товар')
+        self.assertEqual(ru_product_count(21), '21 товар')
+
+    def test_few_form(self):
+        self.assertEqual(ru_product_count(2), '2 товара')
+        self.assertEqual(ru_product_count(3), '3 товара')
+        self.assertEqual(ru_product_count(4), '4 товара')
+        self.assertEqual(ru_product_count(22), '22 товара')
+
+    def test_many_form(self):
+        self.assertEqual(ru_product_count(0), '0 товаров')
+        self.assertEqual(ru_product_count(5), '5 товаров')
+        self.assertEqual(ru_product_count(10), '10 товаров')
+
+    def test_teens_use_many_form_despite_ending_digit(self):
+        self.assertEqual(ru_product_count(11), '11 товаров')
+        self.assertEqual(ru_product_count(12), '12 товаров')
+        self.assertEqual(ru_product_count(14), '14 товаров')
+
+
+class CategoryIconTests(TestCase):
+    def test_known_categories_map_to_dedicated_icons(self):
+        self.assertEqual(CATEGORY_ICONS['Трубы и фитинги'], 'catalog/icons/pipes.jpg')
+        self.assertEqual(CATEGORY_ICONS['Смесители'], 'catalog/icons/faucet.jpg')
+        self.assertEqual(CATEGORY_ICONS['Унитазы и раковины'], 'catalog/icons/toilet.jpg')
+        self.assertEqual(CATEGORY_ICONS['Водонагреватели'], 'catalog/icons/heater.jpg')
+
+    def test_unknown_category_falls_back_to_default_icon(self):
+        Category.objects.create(name='Неизвестная категория')
+        response = self.client.get(reverse('home'))
+        self.assertContains(response, DEFAULT_CATEGORY_ICON)
+
+    def test_home_renders_distinct_icon_per_known_category(self):
+        for name in CATEGORY_ICONS:
+            Category.objects.create(name=name)
+        response = self.client.get(reverse('home'))
+        for icon_path in CATEGORY_ICONS.values():
+            self.assertContains(response, icon_path)
+
+
+class ProductImageFallbackTests(TestCase):
+    def setUp(self):
+        self.category = Category.objects.create(name='Pipes')
+
+    def test_product_without_image_shows_static_placeholder(self):
+        product = Product.objects.create(
+            name='No Photo Product',
+            description='demo product without a real photo',
+            price=Decimal('10.00'),
+            category=self.category,
+            stock_quantity=1,
+        )
+        response = self.client.get(reverse('product_detail', args=[product.id]))
+        self.assertContains(response, 'catalog/icons/placeholder.jpg')
+
+        catalog_response = self.client.get(reverse('catalog', args=[self.category.id]))
+        self.assertContains(catalog_response, 'catalog/icons/placeholder.jpg')
+
+    def test_product_with_image_does_not_show_placeholder(self):
+        product = Product.objects.create(
+            name='Photographed Product',
+            description='demo product with a real photo',
+            price=Decimal('10.00'),
+            image=SimpleUploadedFile('pipe.jpg', b'fake-image-bytes', content_type='image/jpeg'),
+            category=self.category,
+            stock_quantity=1,
+        )
+        response = self.client.get(reverse('product_detail', args=[product.id]))
+        self.assertNotContains(response, 'catalog/icons/placeholder.jpg')
