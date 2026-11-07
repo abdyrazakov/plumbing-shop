@@ -91,6 +91,11 @@ plumbing-shop/
 |---|---|
 | ![Главная](design_review/home.png) | ![Каталог](design_review/catalog.png) |
 
+## Команда
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — как вместе работать над проектом на GitHub: доступ, ветки, PR, ревью, конфликты.
+- [DESIGN-TZ.md](DESIGN-TZ.md) — ТЗ на редизайн витрины: аудит, задачи, анимации, критерии приёмки.
+
 ## Замечания
 
 - `db.sqlite3`, `media/`, `.venv/` и логи исключены из репозитория через `.gitignore`.
