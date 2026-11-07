@@ -1,9 +1,11 @@
+import shutil
+import tempfile
 from decimal import Decimal
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .forms import AddToCartForm, CheckoutForm
@@ -11,8 +13,19 @@ from .models import Category, Order, OrderItem, Product
 from .templatetags.catalog_extras import ru_product_count
 from .views import CATEGORY_ICONS, DEFAULT_CATEGORY_ICON
 
+TEMP_MEDIA_ROOT = tempfile.mkdtemp()
 
-class ModelTests(TestCase):
+
+def tearDownModule():
+    shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
+
+
+@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
+class BaseTestCase(TestCase):
+    pass
+
+
+class ModelTests(BaseTestCase):
     def setUp(self):
         self.category = Category.objects.create(name='Pipes')
         self.product = Product.objects.create(
@@ -37,7 +50,7 @@ class ModelTests(TestCase):
         self.assertFalse(Product.objects.filter(pk=self.product.pk).exists())
 
 
-class OrderModelTests(TestCase):
+class OrderModelTests(BaseTestCase):
     def setUp(self):
         self.category = Category.objects.create(name='Pipes')
         self.product = Product.objects.create(
@@ -69,7 +82,7 @@ class OrderModelTests(TestCase):
         self.assertFalse(OrderItem.objects.exists())
 
 
-class AdminRegistrationTests(TestCase):
+class AdminRegistrationTests(BaseTestCase):
     def test_all_models_registered(self):
         self.assertIn(Category, admin.site._registry)
         self.assertIn(Product, admin.site._registry)
@@ -83,7 +96,7 @@ class AdminRegistrationTests(TestCase):
         self.assertNotIn(OrderItem, admin.site._registry)
 
 
-class ViewTests(TestCase):
+class ViewTests(BaseTestCase):
     def setUp(self):
         self.category = Category.objects.create(name='Pipes')
         self.other_category = Category.objects.create(name='Valves')
@@ -140,7 +153,7 @@ class ViewTests(TestCase):
         self.assertContains(response, 'Добавить в корзину')
 
 
-class AddToCartFormTests(TestCase):
+class AddToCartFormTests(BaseTestCase):
     def test_default_quantity_is_one(self):
         form = AddToCartForm(data={})
         self.assertFalse(form.is_valid())
@@ -161,7 +174,7 @@ class AddToCartFormTests(TestCase):
         self.assertIn('quantity', form.errors)
 
 
-class CheckoutFormTests(TestCase):
+class CheckoutFormTests(BaseTestCase):
     def test_valid_phone_formats_accepted(self):
         for phone in ['555-1234', '+1 (555) 123-4567', '5551234567']:
             form = CheckoutForm(data={
@@ -187,7 +200,7 @@ class CheckoutFormTests(TestCase):
         self.assertIn('customer_name', form.errors)
 
 
-class AddToCartViewTests(TestCase):
+class AddToCartViewTests(BaseTestCase):
     def setUp(self):
         self.category = Category.objects.create(name='Pipes')
         self.product = Product.objects.create(
@@ -241,8 +254,16 @@ class AddToCartViewTests(TestCase):
         )
         self.assertRedirects(response, reverse('product_detail', args=[self.product.id]))
 
+    def test_add_to_cart_rejects_invalid_quantity(self):
+        response = self.client.post(
+            reverse('add_to_cart', args=[self.product.id]),
+            {'quantity': -5},
+        )
+        self.assertRedirects(response, reverse('product_detail', args=[self.product.id]))
+        self.assertNotIn('cart', self.client.session)
 
-class CatalogQuickAddViewTests(TestCase):
+
+class CatalogQuickAddViewTests(BaseTestCase):
     def setUp(self):
         self.category = Category.objects.create(name='Pipes')
         self.product = Product.objects.create(
@@ -278,7 +299,7 @@ class CatalogQuickAddViewTests(TestCase):
         self.assertContains(followed, 'добавлен в корзину')
 
 
-class CartViewTests(TestCase):
+class CartViewTests(BaseTestCase):
     def setUp(self):
         self.category = Category.objects.create(name='Pipes')
         self.product = Product.objects.create(
@@ -347,7 +368,7 @@ class CartViewTests(TestCase):
         self.assertEqual(self.client.session['cart'], {str(self.product.id): 2})
 
 
-class CheckoutViewTests(TestCase):
+class CheckoutViewTests(BaseTestCase):
     def setUp(self):
         self.category = Category.objects.create(name='Pipes')
         self.product = Product.objects.create(
@@ -397,7 +418,7 @@ class CheckoutViewTests(TestCase):
         self.assertEqual(self.client.session['cart'], {str(self.product.id): 2})
 
 
-class OrderThanksViewTests(TestCase):
+class OrderThanksViewTests(BaseTestCase):
     def setUp(self):
         self.category = Category.objects.create(name='Pipes')
         self.product = Product.objects.create(
@@ -432,7 +453,7 @@ class OrderThanksViewTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
-class RuProductCountFilterTests(TestCase):
+class RuProductCountFilterTests(BaseTestCase):
     def test_singular_form(self):
         self.assertEqual(ru_product_count(1), '1 товар')
         self.assertEqual(ru_product_count(21), '21 товар')
@@ -454,7 +475,7 @@ class RuProductCountFilterTests(TestCase):
         self.assertEqual(ru_product_count(14), '14 товаров')
 
 
-class CategoryIconTests(TestCase):
+class CategoryIconTests(BaseTestCase):
     def test_known_categories_map_to_dedicated_icons(self):
         self.assertEqual(CATEGORY_ICONS['Трубы и фитинги'], 'catalog/icons/pipes.jpg')
         self.assertEqual(CATEGORY_ICONS['Смесители'], 'catalog/icons/faucet.jpg')
@@ -474,7 +495,7 @@ class CategoryIconTests(TestCase):
             self.assertContains(response, icon_path)
 
 
-class ProductImageFallbackTests(TestCase):
+class ProductImageFallbackTests(BaseTestCase):
     def setUp(self):
         self.category = Category.objects.create(name='Pipes')
 
@@ -505,7 +526,7 @@ class ProductImageFallbackTests(TestCase):
         self.assertNotContains(response, 'catalog/icons/placeholder.jpg')
 
 
-class AdminTests(TestCase):
+class AdminTests(BaseTestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_superuser(
             username='owner', email='owner@example.com', password='password123',

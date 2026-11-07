@@ -1,5 +1,5 @@
 {% extends 'catalog/base.html' %}
-{% load static %}
+{% load static l10n %}
 
 {% block title %}{{ category.name }} — СантехМаркет{% endblock %}
 
@@ -17,7 +17,7 @@
                     {% endif %}
                     <div class="product-card-body">
                         <div class="product-card-name">{{ product.name }}</div>
-                        <div class="product-card-price">{{ product.price }} сом</div>
+                        <div class="product-card-price">{{ product.price|unlocalize }} сом</div>
                     </div>
                 </a>
                 <form method="post" action="{% url 'add_to_cart' product.id %}" class="product-card-quick-add">

@@ -58,17 +58,29 @@ def clear(session):
 
 
 def total_items(session):
+    cart = _read_cart(session)
+    if not cart:
+        return 0
     return sum(item.quantity for item in iter_items(session))
 
 
 def iter_items(session):
     cart = _read_cart(session)
+    if not cart:
+        return []
     products = Product.objects.filter(pk__in=cart.keys())
     items = []
+    found_ids = set()
     for product in products:
         quantity = cart.get(str(product.id))
         if quantity:
             items.append(CartItem(product=product, quantity=quantity))
+            found_ids.add(str(product.id))
+    stale_keys = set(cart.keys()) - found_ids
+    if stale_keys and hasattr(session, '__setitem__'):
+        for k in stale_keys:
+            cart.pop(k, None)
+        session.modified = True
     return items
 
 

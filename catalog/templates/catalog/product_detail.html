@@ -1,5 +1,5 @@
 {% extends 'catalog/base.html' %}
-{% load static %}
+{% load static l10n %}
 
 {% block title %}{{ product.name }} — СантехМаркет{% endblock %}
 
@@ -13,7 +13,7 @@
         {% endif %}
         <div class="product-detail-info">
             <h1>{{ product.name }}</h1>
-            <p class="product-detail-price">{{ product.price }} сом</p>
+            <p class="product-detail-price">{{ product.price|unlocalize }} сом</p>
             <p>{{ product.description }}</p>
             <span class="product-detail-stock{% if product.is_low_stock %} is-low{% endif %}">
                 {% if product.stock_quantity > 0 %}В наличии: {{ product.stock_quantity }} шт.{% else %}Под заказ{% endif %}

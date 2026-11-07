@@ -19,6 +19,7 @@ class CategoryAdmin(admin.ModelAdmin):
     def product_count(self, obj):
         return obj.product_count
     product_count.admin_order_field = 'product_count'
+    product_count.short_description = 'Товаров'
 
 
 @admin.register(Product)
@@ -47,6 +48,8 @@ class ProductAdmin(admin.ModelAdmin):
     image_preview.short_description = 'Текущее фото'
 
     def stock_status(self, obj):
+        if obj.stock_quantity <= 0:
+            return format_html('<span style="color:#c0392b;">● Нет в наличии</span>')
         if obj.is_low_stock:
             return format_html('<span style="color:#c3602a;">● Мало</span>')
         return format_html('<span style="color:#3f7a56;">● В наличии</span>')
@@ -65,7 +68,7 @@ class OrderItemInline(admin.TabularInline):
 
     def subtotal(self, obj):
         if obj.pk:
-            return obj.quantity * obj.product.price
+            return f'{obj.quantity * obj.product.price:.2f}'
         return '—'
     subtotal.short_description = 'Сумма'
 
@@ -93,6 +96,7 @@ class OrderAdmin(admin.ModelAdmin):
     item_count.short_description = 'Товаров'
 
     def order_total(self, obj):
-        return obj.order_total
+        total = obj.order_total if obj.order_total is not None else 0
+        return f'{total:.2f}'
     order_total.admin_order_field = 'order_total'
     order_total.short_description = 'Сумма заказа'

@@ -39,15 +39,28 @@ def product_detail(request, product_id):
 @require_POST
 def add_to_cart(request, product_id):
     product = get_object_or_404(Product, pk=product_id)
-    form = AddToCartForm(request.POST)
-    quantity = form.cleaned_data['quantity'] if form.is_valid() else 1
+    next_url = request.POST.get('next', '')
+    redirect_target = next_url if (
+        next_url and url_has_allowed_host_and_scheme(
+            next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        )
+    ) else None
+
+    if 'quantity' in request.POST:
+        form = AddToCartForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, 'Некорректное количество.')
+            if redirect_target:
+                return redirect(redirect_target)
+            return redirect('product_detail', product_id=product.id)
+        quantity = form.cleaned_data['quantity']
+    else:
+        quantity = 1
+
     cart.add(request.session, product.id, quantity)
     messages.success(request, f'«{product.name}» добавлен в корзину.')
-    next_url = request.POST.get('next', '')
-    if next_url and url_has_allowed_host_and_scheme(
-        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-    ):
-        return redirect(next_url)
+    if redirect_target:
+        return redirect(redirect_target)
     return redirect('product_detail', product_id=product.id)
 
 
